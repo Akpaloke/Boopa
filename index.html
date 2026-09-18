@@ -363,15 +363,46 @@ function SignUp({onBack,onDone}){
     e.preventDefault();
     setError("");
     const fullName=name.trim(); const emailValue=email.trim(); const universityValue=university.trim(); const departmentValue=department.trim();
-    if(!fullName||!emailValue||password.length<8||!universityValue||!departmentValue||!number.trim()||!LEVELS.includes(level)){setError("Complete every field using a valid level from 100 to 500.");return;}
+    const numericLevel=Number(level); const numberValue=number.trim();
+    if(!fullName||!emailValue||password.length<8||!universityValue||!departmentValue||!numberValue||![100,200,300,400,500].includes(numericLevel)){setError("Complete every field using a valid level from 100 to 500.");return;}
     setSaving(true);
     try{
-      const client=requireClient(); const {data,error:authError}=await client.auth.signUp({email:emailValue,password});
-      if(authError)throw authError; if(!data.user)throw new Error("Unable to create your account.");
-      const profile={id:data.user.id,full_name:fullName,level,department:departmentValue,university:universityValue,number:number.trim(),email:emailValue,avatar_url:photo,bio:""};
-      const {error:profileError}=await client.from(PROFILE_TABLE).insert(profile);
-      if(profileError){console.error("Boopa profile insert failed:",profileError);throw new Error(profileError.code==="42703"?"Your profile database is missing a required field. Apply the latest Supabase migration and try again.":profileError.message);}
-      onDone(normalizeProfile({...profile,photo}));
+      const client=requireClient();
+      const {data:authData,error:authError}=await client.auth.signUp({email:emailValue,password,options:{data:{full_name:fullName,university:universityValue,department:departmentValue,level:numericLevel,number:numberValue,avatar_url:photo}}});
+      if(authError){
+        console.error("Signup error:",authError);
+        console.error("Signup error message:",authError?.message);
+        console.error("Signup error details:",authError?.details);
+        console.error("Signup error hint:",authError?.hint);
+        console.error("Signup error code:",authError?.code);
+        throw authError;
+      }
+      const user=authData?.user;
+      if(!user)throw new Error("User account was not created.");
+      const profilePayload={id:user.id,full_name:fullName,email:emailValue,university:universityValue,department:departmentValue,level:numericLevel,number:numberValue||null};
+      console.log("Profile payload:",profilePayload);
+      const {data:existingProfile,error:profileLookupError}=await client.from(PROFILE_TABLE).select("id").eq("id",user.id).maybeSingle();
+      if(profileLookupError){
+        console.error("Signup error:",profileLookupError);
+        console.error("Signup error message:",profileLookupError?.message);
+        console.error("Signup error details:",profileLookupError?.details);
+        console.error("Signup error hint:",profileLookupError?.hint);
+        console.error("Signup error code:",profileLookupError?.code);
+        throw profileLookupError;
+      }
+      if(!existingProfile){
+        const {error:profileError}=await client.from(PROFILE_TABLE).insert(profilePayload);
+        if(profileError){
+          console.error("Signup error:",profileError);
+          console.error("Signup error message:",profileError?.message);
+          console.error("Signup error details:",profileError?.details);
+          console.error("Signup error hint:",profileError?.hint);
+          console.error("Signup error code:",profileError?.code);
+          throw profileError;
+        }
+      }
+      if(!authData.session){setError("Account created. Check your email to confirm your account, then return to Boopa to continue.");return;}
+      onDone(normalizeProfile({...profilePayload,avatar_url:photo}));
     }catch(err){console.error("Boopa signup failed:",err);setError(err.message||"We could not create your profile. Please try again.");}finally{setSaving(false);}
   };
 

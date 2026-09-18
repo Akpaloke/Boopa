@@ -15,4 +15,4 @@ window.BOOPA_CONFIG = {
 
 The local variable names and deployment placeholders are documented in `.env.example`. Never place `PAYSTACK_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` in `config.js`, HTML, frontend environment variables, or browser code.
 
-Apply all migrations in `supabase/migrations` before deploying, including `202609181430_profiles_consistency.sql`. That migration standardizes legacy profile fields to `full_name`, `university`, `department`, and text levels `100` through `500` without deleting profile rows, then requests a PostgREST schema reload. The frontend reads profiles, communities, and posts from Supabase.
+Apply all migrations in `supabase/migrations` before deploying, including `202609181430_profiles_consistency.sql` and `202609181500_signup_profile_trigger.sql`. The signup migration standardizes profile fields, stores levels as integers from `100` through `500`, creates the `auth.users` profile trigger, and requests a PostgREST schema reload. The frontend reads profiles, communities, and posts from Supabase.

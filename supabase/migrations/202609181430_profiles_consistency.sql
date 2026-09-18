@@ -75,7 +75,8 @@ create index if not exists profiles_department_idx on public.profiles (departmen
 
 alter table public.profiles enable row level security;
 drop policy if exists "Users create their own profile" on public.profiles;
-create policy "Users create their own profile" on public.profiles
+drop policy if exists "Users can create own profile" on public.profiles;
+create policy "Users can create own profile" on public.profiles
   for insert with check (auth.uid() = id);
 
 notify pgrst, 'reload schema';
