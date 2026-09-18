@@ -194,8 +194,8 @@
   .profile-card{max-width:420px;margin:0 auto;}
   .profile-pfp{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 0 22px;}
   .profile-pfp h2{font-size:22px;margin-top:14px;}
-  .profile-pfp .dept{font-size:14.5px;font-weight:500;margin-top:4px;}
-  .profile-pfp .uni{font-size:13px;color:var(--text-muted);margin-top:2px;}
+  .profile-pfp .department{font-size:14.5px;font-weight:500;margin-top:4px;}
+  .profile-pfp .university{font-size:13px;color:var(--text-muted);margin-top:2px;}
   .info-row{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);font-size:13.5px;}
   .info-row span:first-child{color:var(--text-muted);}
   .info-row:last-child{border-bottom:none;}
@@ -258,7 +258,7 @@ const requireClient = () => {
   if (!supabaseClient) throw new Error("Supabase is not configured for this deployment.");
   return supabaseClient;
 };
-const normalizeProfile = profile => profile ? {...profile,isVerified:profile.is_verified || profile.verification_status==="active"} : profile;
+const normalizeProfile = profile => profile ? {...profile,isVerified:profile.is_verified || profile.verification_status==="active",full_name:profile.full_name||"",university:profile.university||"",department:profile.department||"",avatar_url:profile.avatar_url||""} : profile;
 
 /* ---------- helpers ---------- */
 const PALETTE = ["#2E22C9","#E0553B","#1B9C63","#B4257A","#0E8FA6","#8A5CF6","#C97A1E"];
@@ -310,9 +310,7 @@ const EmptyState = ({icon,title,body}) => (
 );
 
 /* ---------- profile form options ---------- */
-const UNIVERSITIES = ["Lead City University","Covenant University","University of Lagos"];
-const LEVELS = ["100 Level","200 Level","300 Level","400 Level"];
-const DEPTS = ["Computer Science","Software Engineering","Accounting","Mass Communication","Mechanical Engineering","Marketing","Law"];
+const LEVELS = ["100","200","300","400","500"];
 
 /* ---------- Landing ---------- */
 function Landing({onSignup,onLogin}){
@@ -344,12 +342,13 @@ function SignUp({onBack,onDone}){
   const [photo,setPhoto] = useState(null);
   const [name,setName] = useState("");
   const [level,setLevel] = useState(LEVELS[0]);
-  const [dept,setDept] = useState(DEPTS[0]);
-  const [uni,setUni] = useState(UNIVERSITIES[0]);
+  const [department,setDepartment] = useState("");
+  const [university,setUniversity] = useState("");
   const [number,setNumber] = useState("");
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [error,setError] = useState("");
+  const [saving,setSaving] = useState(false);
   const fileRef = useRef(null);
 
   const pickPhoto = (e) => {
@@ -362,14 +361,18 @@ function SignUp({onBack,onDone}){
 
   const submit = async (e) => {
     e.preventDefault();
-    if(!name.trim() || !number.trim()) return;
+    setError("");
+    const fullName=name.trim(); const emailValue=email.trim(); const universityValue=university.trim(); const departmentValue=department.trim();
+    if(!fullName||!emailValue||password.length<8||!universityValue||!departmentValue||!number.trim()||!LEVELS.includes(level)){setError("Complete every field using a valid level from 100 to 500.");return;}
+    setSaving(true);
     try{
-      const client=requireClient(); const {data,error:authError}=await client.auth.signUp({email:email.trim(),password});
+      const client=requireClient(); const {data,error:authError}=await client.auth.signUp({email:emailValue,password});
       if(authError)throw authError; if(!data.user)throw new Error("Unable to create your account.");
-      const {error:profileError}=await client.from(PROFILE_TABLE).insert({id:data.user.id,name:name.trim(),level,dept,uni,number:number.trim(),email:email.trim(),avatar_url:photo});
-      if(profileError)throw profileError;
-      onDone({id:data.user.id,name:name.trim(),level,dept,uni,number:number.trim(),email:email.trim(),photo});
-    }catch(err){setError(err.message);}
+      const profile={id:data.user.id,full_name:fullName,level,department:departmentValue,university:universityValue,number:number.trim(),email:emailValue,avatar_url:photo,bio:""};
+      const {error:profileError}=await client.from(PROFILE_TABLE).insert(profile);
+      if(profileError){console.error("Boopa profile insert failed:",profileError);throw new Error(profileError.code==="42703"?"Your profile database is missing a required field. Apply the latest Supabase migration and try again.":profileError.message);}
+      onDone(normalizeProfile({...profile,photo}));
+    }catch(err){console.error("Boopa signup failed:",err);setError(err.message||"We could not create your profile. Please try again.");}finally{setSaving(false);}
   };
 
   return (
@@ -392,15 +395,15 @@ function SignUp({onBack,onDone}){
           </div>
           <div className="field">
             <label htmlFor="signup-level">Level</label>
-            <select id="signup-level" value={level} onChange={e=>setLevel(e.target.value)}>{LEVELS.map(item=><option key={item}>{item}</option>)}</select>
+            <select id="signup-level" value={level} onChange={e=>setLevel(e.target.value)} required>{LEVELS.map(item=><option key={item} value={item}>{item} Level</option>)}</select>
           </div>
           <div className="field">
-            <label htmlFor="signup-dept">Department</label>
-            <select id="signup-dept" value={dept} onChange={e=>setDept(e.target.value)}>{DEPTS.map(item=><option key={item}>{item}</option>)}</select>
+            <label htmlFor="signup-department">Department</label>
+            <input id="signup-department" value={department} onChange={e=>setDepartment(e.target.value)} placeholder="e.g. Medicine and Surgery" required />
           </div>
           <div className="field">
-            <label htmlFor="signup-uni">University</label>
-            <select id="signup-uni" value={uni} onChange={e=>setUni(e.target.value)}>{UNIVERSITIES.map(item=><option key={item}>{item}</option>)}</select>
+            <label htmlFor="signup-university">University</label>
+            <input id="signup-university" value={university} onChange={e=>setUniversity(e.target.value)} placeholder="e.g. University of Lagos" required />
           </div>
           <div className="field">
             <label htmlFor="signup-email">Email</label>
@@ -416,7 +419,7 @@ function SignUp({onBack,onDone}){
           </div>
           <p className="field-note">Your number is only shared when another student chooses to connect with you.</p>
           {error&&<p className="verification-status error">{error}</p>}
-          <button className="submit-btn" type="submit">Create my profile</button>
+          <button className="submit-btn" type="submit" disabled={saving}>{saving?"Creating your profile…":"Create my profile"}</button>
         </form>
       </div>
     </div>
@@ -440,15 +443,16 @@ function Login({onBack,onDone}){
 }
 
 function PersonRow({student,onClick}){
-  return <div className="row-item" onClick={onClick} role="button" tabIndex="0" onKeyDown={e=>e.key==="Enter"&&onClick()}><Avatar name={student.name} photo={student.photo}/><div className="row-text"><div className="row-title">{student.name}{student.isVerified&&<VerifiedBadge/>}</div><div className="row-sub">{student.dept} · {student.uni}</div></div><span className="row-tag">{student.level.replace(" Level","")}</span><Icon name="chevron" size={17}/></div>;
+  return <div className="row-item" onClick={onClick} role="button" tabIndex="0" onKeyDown={e=>e.key==="Enter"&&onClick()}><Avatar name={student.full_name} photo={student.avatar_url}/><div className="row-text"><div className="row-title">{student.full_name}{student.isVerified&&<VerifiedBadge/>}</div><div className="row-sub">{student.department} · {student.university}</div></div><span className="row-tag">{student.level}</span><Icon name="chevron" size={17}/></div>;
 }
 
 function Discover({onPerson}){
-  const [query,setQuery] = useState(""); const [uni,setUni] = useState("All universities"); const [level,setLevel] = useState("All levels"); const [dept,setDept] = useState("All departments"); const [students,setStudents] = useState([]); const [loading,setLoading] = useState(true); const [error,setError] = useState("");
+  const [query,setQuery] = useState(""); const [university,setUniversity] = useState("All universities"); const [level,setLevel] = useState("All levels"); const [department,setDepartment] = useState("All departments"); const [students,setStudents] = useState([]); const [loading,setLoading] = useState(true); const [error,setError] = useState("");
   const load=async()=>{try{const client=requireClient();const session=await getSession();if(!session)throw new Error("Please sign in to discover students.");const {data,error}=await client.from(PROFILE_TABLE).select("*").neq("id",session.user.id).order("created_at",{ascending:false});if(error)throw error;setStudents((data||[]).map(normalizeProfile));}catch(err){setError(err.message);}finally{setLoading(false);}};
   useEffect(()=>{load();if(!supabaseClient)return;const channel=supabaseClient.channel("profiles-discover").on("postgres_changes",{event:"*",schema:"public",table:PROFILE_TABLE},load).subscribe();return()=>supabaseClient.removeChannel(channel);},[]);
-  const results=students.filter(student=>(student.name+" "+(student.dept||"")+" "+(student.uni||"")).toLowerCase().includes(query.toLowerCase())&&(uni==="All universities"||student.uni===uni)&&(level==="All levels"||student.level===level)&&(dept==="All departments"||student.dept===dept));
-  return <div className="motion-in"><div className="page-head"><h2>Find your people</h2><p>Discover real students who share your campus and interests.</p></div><div className="search-box"><Icon name="search" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search names, departments or interests" aria-label="Search students"/></div><div className="filter-row"><select value={uni} onChange={e=>setUni(e.target.value)}><option>All universities</option>{UNIVERSITIES.map(item=><option key={item}>{item}</option>)}</select><select value={level} onChange={e=>setLevel(e.target.value)}><option>All levels</option>{LEVELS.map(item=><option key={item}>{item}</option>)}</select><select value={dept} onChange={e=>setDept(e.target.value)}><option>All departments</option>{DEPTS.map(item=><option key={item}>{item}</option>)}</select></div><div className="list">{loading?[1,2,3].map(item=><div className="skeleton" key={item}/>):error?<EmptyState icon="user" title="Unable to load students" body={error}/>:results.length?results.map((student,index)=><div className="stagger-in" style={{"--item-index":index}} key={student.id}><PersonRow student={student} onClick={()=>onPerson(student)}/></div>):<EmptyState icon="users" title="No other students have joined yet" body="Invite your friends to Boopa."/>}</div></div>;
+  const results=students.filter(student=>(student.full_name+" "+(student.department||"")+" "+(student.university||"")).toLowerCase().includes(query.toLowerCase())&&(university==="All universities"||student.university===university)&&(level==="All levels"||student.level===level)&&(department==="All departments"||student.department===department));
+  const universities=["All universities",...Array.from(new Set(students.map(student=>student.university).filter(Boolean)))]; const departments=["All departments",...Array.from(new Set(students.map(student=>student.department).filter(Boolean)))];
+  return <div className="motion-in"><div className="page-head"><h2>Find your people</h2><p>Discover real students who share your campus and interests.</p></div><div className="search-box"><Icon name="search" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search names, departments or interests" aria-label="Search students"/></div><div className="filter-row"><select value={university} onChange={e=>setUniversity(e.target.value)}>{universities.map(item=><option key={item}>{item}</option>)}</select><select value={level} onChange={e=>setLevel(e.target.value)}><option>All levels</option>{LEVELS.map(item=><option key={item} value={item}>{item} Level</option>)}</select><select value={department} onChange={e=>setDepartment(e.target.value)}>{departments.map(item=><option key={item}>{item}</option>)}</select></div><div className="list">{loading?[1,2,3].map(item=><div className="skeleton" key={item}/>):error?<EmptyState icon="user" title="Unable to load students" body={error}/>:results.length?results.map((student,index)=><div className="stagger-in" style={{"--item-index":index}} key={student.id}><PersonRow student={student} onClick={()=>onPerson(student)}/></div>):<EmptyState icon="users" title="No other students have joined yet" body="Invite your friends to Boopa."/>}</div></div>;
 }
 
 function Communities({onOpen}){
@@ -503,7 +507,7 @@ function Profile({profile,onLogout,onSave,isVerified,status,onRefresh}){
   const [editing,setEditing]=useState(false); const [draft,setDraft]=useState(profile);
   const update=key=>e=>setDraft({...draft,[key]:e.target.value});
   const save=e=>{e.preventDefault();onSave(draft);setEditing(false);};
-  return <div className="profile-card"><div className="profile-pfp"><Avatar name={profile.name} photo={profile.photo} size={88}/><h2>{profile.name}{isVerified&&<VerifiedBadge/>}</h2><div className="dept">{profile.dept}</div><div className="uni">{profile.uni}</div></div>{editing?<form className="edit-fields" onSubmit={save}><div className="field"><label htmlFor="edit-name">Name</label><input id="edit-name" value={draft.name} onChange={update("name")} required /></div><div className="field"><label htmlFor="edit-email">Email for billing</label><input id="edit-email" type="email" value={draft.email||""} onChange={update("email")} placeholder="you@example.com" required /></div><button className="submit-btn" type="submit">Save changes</button></form>:<><div className="info-row"><span>Level</span><b>{profile.level}</b></div><div className="info-row"><span>WhatsApp</span><b>{profile.number}</b></div><Verification profile={profile} isVerified={isVerified} status={status} onRefresh={onRefresh}/><button className="cta-secondary" onClick={()=>setEditing(true)} style={{marginTop:16}}>Edit profile</button></>}<button className="submit-btn" onClick={onLogout} style={{marginTop:20}}>Log out</button></div>;
+  return <div className="profile-card"><div className="profile-pfp"><Avatar name={profile.full_name} photo={profile.avatar_url} size={88}/><h2>{profile.full_name}{isVerified&&<VerifiedBadge/>}</h2><div className="department">{profile.department}</div><div className="university">{profile.university}</div></div>{editing?<form className="edit-fields" onSubmit={save}><div className="field"><label htmlFor="edit-name">Name</label><input id="edit-name" value={draft.full_name} onChange={update("full_name")} required /></div><div className="field"><label htmlFor="edit-email">Email for billing</label><input id="edit-email" type="email" value={draft.email||""} onChange={update("email")} placeholder="you@example.com" required /></div><div className="field"><label htmlFor="edit-university">University</label><input id="edit-university" value={draft.university} onChange={update("university")} required /></div><div className="field"><label htmlFor="edit-department">Department</label><input id="edit-department" value={draft.department} onChange={update("department")} required /></div><div className="field"><label htmlFor="edit-level">Level</label><select id="edit-level" value={draft.level} onChange={update("level")} required>{LEVELS.map(item=><option key={item} value={item}>{item} Level</option>)}</select></div><button className="submit-btn" type="submit">Save changes</button></form>:<><div className="info-row"><span>Level</span><b>{profile.level} Level</b></div><div className="info-row"><span>WhatsApp</span><b>{profile.number}</b></div><Verification profile={profile} isVerified={isVerified} status={status} onRefresh={onRefresh}/><button className="cta-secondary" onClick={()=>setEditing(true)} style={{marginTop:16}}>Edit profile</button></>}<button className="submit-btn" onClick={onLogout} style={{marginTop:20}}>Log out</button></div>;
 }
 
 function PersonProfile({student,onBack}){
@@ -511,7 +515,7 @@ function PersonProfile({student,onBack}){
   useEffect(()=>{(async()=>{try{const session=await getSession();const {data}=await requireClient().from("friend_requests").select("status,sender_id,receiver_id").or("and(sender_id.eq."+session.user.id+",receiver_id.eq."+student.id+"),and(sender_id.eq."+student.id+",receiver_id.eq."+session.user.id+")").order("created_at",{ascending:false}).limit(1).maybeSingle();setFriendStatus(data?.status==="accepted"?"accepted":data?.sender_id===session.user.id?"sent":data?.status||"none");}catch(error){setFriendStatus("none");}})();},[student.id]);
   const addFriend=async()=>{try{const session=await getSession();const {error}=await requireClient().from("friend_requests").insert({sender_id:session.user.id,receiver_id:student.id,status:"pending"});if(error)throw error;setFriendStatus("sent");setMessage("Friend request sent.");}catch(error){setMessage(error.message);}};
   const connect=()=>window.open("https://wa.me/"+student.number.replace(/\D/g,""),"_blank","noopener,noreferrer");
-  return <div className="profile-card"><div className="row-back"><button className="back-btn" onClick={onBack}><Icon name="arrow-left" size={18}/></button><h2>Student profile</h2></div><div className="profile-pfp"><Avatar name={student.name} photo={student.photo} size={88}/><h2>{student.name}{student.isVerified&&<VerifiedBadge/>}</h2><div className="dept">{student.dept}</div><div className="uni">{student.uni}</div></div><div className="info-row"><span>Level</span><b>{student.level}</b></div><div className="info-row"><span>Community</span><b>{student.community||"Student"}</b></div>{friendStatus==="accepted"?<button className="wa-btn" onClick={connect}><Icon name="whatsapp" size={19}/> Connect on WhatsApp</button>:<button className="submit-btn" onClick={addFriend} disabled={friendStatus!=="none"}>{friendStatus==="sent"?"Request Sent":friendStatus==="accepted"?"Friends":"Add Friend"}</button>}{message&&<div className="verification-status">{message}</div>}</div>;
+  return <div className="profile-card"><div className="row-back"><button className="back-btn" onClick={onBack}><Icon name="arrow-left" size={18}/></button><h2>Student profile</h2></div><div className="profile-pfp"><Avatar name={student.full_name} photo={student.avatar_url} size={88}/><h2>{student.full_name}{student.isVerified&&<VerifiedBadge/>}</h2><div className="department">{student.department}</div><div className="university">{student.university}</div></div><div className="info-row"><span>Level</span><b>{student.level} Level</b></div><div className="info-row"><span>Community</span><b>{student.community||"Student"}</b></div>{friendStatus==="accepted"?<button className="wa-btn" onClick={connect}><Icon name="whatsapp" size={19}/> Connect on WhatsApp</button>:<button className="submit-btn" onClick={addFriend} disabled={friendStatus!=="none"}>{friendStatus==="sent"?"Request Sent":friendStatus==="accepted"?"Friends":"Add Friend"}</button>}{message&&<div className="verification-status">{message}</div>}</div>;
 }
 
 function App({profile,onLogout}){
@@ -520,7 +524,7 @@ function App({profile,onLogout}){
   const refreshStatus=async()=>{try{const response=await fetch("/functions/v1/verification-status",{headers:authHeaders()});if(!response.ok)throw new Error("status unavailable");setStatus(await response.json());}catch(error){setStatus({status:"unavailable"});}};
   useEffect(()=>{refreshStatus();},[]);
   const isVerified=!!status&&status.status==="active";
-  const saveProfile=value=>{localStorage.setItem("boopa-profile",JSON.stringify(value));window.location.reload();};
+  const saveProfile=async value=>{try{const {data,error}=await requireClient().from(PROFILE_TABLE).update({full_name:value.full_name,university:value.university,department:value.department,level:value.level,email:value.email}).eq("id",profile.id).select("*").single();if(error)throw error;window.location.reload();}catch(error){console.error("Boopa profile update failed:",error);window.alert("We could not save your profile. Please try again.");}};
   const openCommunity=community=>{setSelected({type:"community",value:community});setTab("communities")};
   const content=selected?(selected.type==="person"?<PersonProfile student={selected.value} onBack={()=>setSelected(null)}/>:<CommunityDetail community={selected.value} onBack={()=>setSelected(null)}/>):tab==="discover"?<Discover onPerson={student=>setSelected({type:"person",value:student})}/>:tab==="communities"?<Communities onOpen={openCommunity}/>:tab==="feed"?<Feed onOpen={openCommunity}/>:tab==="notifications"?<Notifications/>:<Profile profile={profile} onLogout={onLogout} onSave={saveProfile} isVerified={isVerified} status={status} onRefresh={refreshStatus}/>;
   const nav=[{id:"discover",icon:"compass",label:"Discover"},{id:"communities",icon:"users",label:"Communities"},{id:"feed",icon:"feed",label:"Feed"},{id:"notifications",icon:"bell",label:"Alerts"},{id:"profile",icon:"user",label:"Profile"}];

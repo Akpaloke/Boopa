@@ -11,6 +11,8 @@ supabase functions deploy paystack-webhook
 supabase functions deploy community-verification-initialize
 ```
 
+Apply every migration in `supabase/migrations`, including `202609181430_profiles_consistency.sql`, before testing signup. It standardizes profile fields and requests a PostgREST schema-cache reload.
+
 Set these server-side secrets only. `PAYSTACK_PLAN_CODE` is required by the Edge Functions as well:
 
 ```sh
