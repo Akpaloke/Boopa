@@ -15,4 +15,4 @@ window.BOOPA_CONFIG = {
 
 The local variable names and deployment placeholders are documented in `.env.example`. Never place `PAYSTACK_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` in `config.js`, HTML, frontend environment variables, or browser code.
 
-Apply all migrations in `supabase/migrations` before deploying, including `202609181430_profiles_consistency.sql` and `202609181500_signup_profile_trigger.sql`. The signup migration standardizes profile fields, stores levels as integers from `100` through `500`, creates the `auth.users` profile trigger, and requests a PostgREST schema reload. The frontend reads profiles, communities, and posts from Supabase.
+Apply all migrations in `supabase/migrations` before deploying, including `202609181430_profiles_consistency.sql`, `202609181500_signup_profile_trigger.sql`, and `202609182300_requested_fixes.sql`. The requested-fixes migration creates/configures the `avatars` bucket and its ownership policies, adds `communities.whatsapp_link`, and exposes only non-private profile fields through `public_profiles`. The frontend reads profiles, communities, and posts from Supabase.
