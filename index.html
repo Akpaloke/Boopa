@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Boopa — Find Your People</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.28.4/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://js.paystack.co/v2/inline.js"></script>
+<script src="/config.js"></script>
+<style>
+  :root{
+    --primary:#3730A3;
+    --primary-dark:#2A2482;
+    --primary-soft:#F1F0FA;
+    --accent:#131316;
+    --accent-ink:#FFFFFF;
+    --bg:#FBFBFC;
+    --surface:#FFFFFF;
+    --text:#131316;
+    --text-muted:#78767F;
+    --border:#E7E6EA;
+    --success:#1B9C63;
+    --success-soft:#E7F7EF;
+    --danger:#C0392B;
+    --radius-s:8px;
+    --radius-m:12px;
+    --radius-l:16px;
+    --font-display:'Space Grotesk','Segoe UI',system-ui,sans-serif;
+    --font-body:'Inter','Segoe UI',system-ui,sans-serif;
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --bg:#111013;--surface:#19181C;--text:#F3F2F5;--text-muted:#9A98A2;--border:#2C2A30;--primary-soft:#221F3D;--accent:#F3F2F5;--accent-ink:#131316;
+    }
+  }
+  :root[data-theme="dark"]{--bg:#111013;--surface:#19181C;--text:#F3F2F5;--text-muted:#9A98A2;--border:#2C2A30;--primary-soft:#221F3D;--accent:#F3F2F5;--accent-ink:#131316;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;min-width:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-body);-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  #root{min-height:100vh;}
+  h1{font-family:var(--font-display);margin:0;letter-spacing:-0.01em;}
+  h2,h3,h4{font-family:var(--font-body);font-weight:600;margin:0;letter-spacing:-0.01em;}
+  p{margin:0;}
+  button{font-family:var(--font-body);cursor:pointer;touch-action:manipulation;}
+  a{color:inherit;text-decoration:none;}
+  input,select{font-family:var(--font-body);max-width:100%;}
+  button,input,select{transition:border-color .2s ease,box-shadow .2s ease,background-color .2s ease,color .2s ease,transform .2s ease,opacity .2s ease;}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid color-mix(in srgb,var(--primary) 28%,transparent);outline-offset:2px;}
+
+  /* ---- brand ---- */
+  .wordmark{font-family:var(--font-display);font-weight:700;font-size:18px;display:flex;align-items:center;gap:9px;letter-spacing:-0.01em;}
+  .mark{width:28px;height:28px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:var(--accent-ink);flex-shrink:0;}
+
+  /* ---- Landing ---- */
+  .landing{min-height:100vh;display:flex;flex-direction:column;background:var(--surface);}
+  .landing-nav{padding:26px 6vw;}
+  .landing-mid{flex:1;display:flex;align-items:center;justify-content:center;padding:6vh 6vw;}
+  .landing-box{max-width:440px;text-align:center;}
+  .landing-box h1{font-size:clamp(34px,5.4vw,46px);line-height:1.08;font-weight:600;}
+  .landing-box .tagline{font-size:15.5px;color:var(--text-muted);margin-top:8px;}
+  .landing-box .pitch{font-size:15.5px;line-height:1.65;margin-top:24px;color:var(--text);max-width:36ch;margin-left:auto;margin-right:auto;}
+  .landing-lines{margin-top:20px;display:flex;flex-direction:column;gap:3px;}
+  .landing-lines span{font-size:12.5px;color:var(--text-muted);}
+  .landing-cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:32px;}
+  .cta-primary{background:var(--text);color:var(--surface);border:none;padding:13px 30px;border-radius:9px;font-weight:600;font-size:14.5px;min-height:46px;}
+  .cta-secondary{background:none;border:none;color:var(--text-muted);font-size:13.5px;font-weight:600;text-decoration:underline;text-underline-offset:3px;}
+  .landing-foot{padding:22px;text-align:center;font-size:11.5px;color:var(--text-muted);}
+
+  /* ---- Auth ---- */
+  .auth-shell{min-height:100vh;display:flex;flex-direction:column;background:var(--bg);}
+  .auth-top{padding:22px 6vw;display:flex;align-items:center;gap:14px;}
+  .back-btn{width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text);flex:0 0 auto;}
+  .auth-mid{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:2vh 6vw 6vh;}
+  .auth-card{width:100%;max-width:420px;}
+  .auth-card h2{font-size:27px;}
+  .auth-card .sub{color:var(--text-muted);font-size:14px;margin-top:6px;}
+  .pfp-upload{margin:26px 0 6px;display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .pfp-circle{width:84px;height:84px;border-radius:50%;background:var(--primary-soft);border:1.5px dashed var(--primary);display:flex;align-items:center;justify-content:center;color:var(--primary);cursor:pointer;overflow:hidden;position:relative;}
+  .pfp-circle img{width:100%;height:100%;object-fit:cover;}
+  .pfp-upload .hint{font-size:12.5px;color:var(--text-muted);}
+  .field{margin-bottom:15px;}
+  .field label{display:block;font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:6px;}
+  .field input,.field select{width:100%;border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:12px 14px;font-size:14.5px;color:var(--text);outline:none;}
+  .field input:focus,.field select:focus{border-color:var(--primary);}
+  .submit-btn{width:100%;background:var(--text);color:var(--surface);border:none;border-radius:9px;padding:13px;font-weight:600;font-size:14.5px;margin-top:8px;}
+  .field-note{font-size:12px;color:var(--text-muted);margin-top:-8px;margin-bottom:16px;line-height:1.5;}
+  .auth-switch{text-align:center;margin-top:20px;font-size:13.5px;color:var(--text-muted);}
+  .auth-switch button{background:none;border:none;color:var(--primary);font-weight:700;font-size:13.5px;}
+
+  /* ---- App shell ---- */
+  .app{min-height:100vh;display:flex;flex-direction:column;}
+  .app-top{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--border);padding:16px 6vw;display:flex;align-items:center;gap:14px;}
+  .app-content{flex:1;max-width:920px;margin:0 auto;width:100%;padding:24px 6vw calc(100px + env(safe-area-inset-bottom));}
+  .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--border);display:flex;padding:8px 6px calc(8px + env(safe-area-inset-bottom));z-index:10;}
+  .bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;color:var(--text-muted);font-size:11px;font-weight:600;padding:7px 6px;border-radius:10px;min-height:48px;}
+  .bottom-nav button.active{color:var(--primary);}
+
+  .page-head{margin-bottom:20px;}
+  .page-head h2{font-size:24px;}
+  .page-head p{color:var(--text-muted);margin-top:5px;font-size:14px;}
+  .row-back{display:flex;align-items:center;gap:12px;margin-bottom:18px;}
+  .row-back h2{font-size:21px;}
+
+  .search-box{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 15px;margin-bottom:14px;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
+  .search-box:focus-within{border-color:var(--primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 10%,transparent);}
+  .search-box input{border:none;outline:none;background:transparent;color:var(--text);font-size:14.5px;width:100%;}
+  .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;}
+  .filter-row select{padding:9px 12px;border-radius:9px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:600;color:var(--text-muted);min-height:40px;}
+  .chip-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;}
+  .chip{padding:9px 15px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:13.5px;font-weight:600;color:var(--text-muted);min-height:40px;}
+  .chip.active{background:var(--text);color:var(--surface);border-color:var(--text);}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-m);padding:17px;}
+  .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:600;color:#fff;flex-shrink:0;overflow:hidden;}
+  .avatar img{width:100%;height:100%;object-fit:cover;}
+  .verified-badge{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:#2563EB;color:#fff;font-size:11px;font-weight:700;vertical-align:middle;margin-left:5px;box-shadow:0 0 0 2px var(--surface);animation:badge-in .35s cubic-bezier(.2,.8,.2,1) both;}
+  @keyframes badge-in{from{opacity:0;transform:scale(.65)}to{opacity:1;transform:scale(1)}}
+  .verification-card{border:1px solid var(--border);border-radius:var(--radius-m);padding:18px;margin-top:20px;background:var(--surface);}
+  .verification-card h3{display:flex;align-items:center;gap:7px;font-size:16px;}
+  .verification-card p{font-size:13px;color:var(--text-muted);line-height:1.55;margin-top:7px;}
+  .verification-card ul{padding-left:18px;margin:13px 0;color:var(--text-muted);font-size:13px;line-height:1.8;}
+  .verification-status{font-size:12.5px;margin-top:10px;color:var(--text-muted);}
+  .verification-status.success{color:var(--success);}.verification-status.error{color:var(--danger);}
+  .edit-fields{margin-top:20px;border-top:1px solid var(--border);padding-top:18px;}
+  .motion-in{animation:route-in .4s cubic-bezier(.2,.8,.2,1) both;will-change:opacity,transform;}
+  .stagger-in{animation:row-in .42s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--item-index, 0) * 45ms);will-change:opacity,transform;}
+  .clickable{transition:transform .22s cubic-bezier(.2,.8,.2,1),box-shadow .22s ease,background-color .22s ease;}
+  .submit-btn,.wa-btn,.cta-primary,.back-btn,.chip,.cta-secondary{transition:transform .18s ease,box-shadow .2s ease,background-color .2s ease,color .2s ease,opacity .2s ease;}
+  .submit-btn:active,.wa-btn:active,.cta-primary:active,.back-btn:active,.chip:active,.cta-secondary:active,.bottom-nav button:active{transform:scale(.97);}
+  .submit-btn:disabled,.wa-btn:disabled{cursor:wait;opacity:.65;}
+  .toast{position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--text);color:var(--surface);padding:11px 16px;border-radius:10px;font-size:13px;z-index:20;animation:toast-in .3s cubic-bezier(.2,.8,.2,1) both;max-width:min( calc(100vw - 32px), 420px);text-align:center;}
+  .skeleton{height:52px;border-radius:10px;background:linear-gradient(100deg,var(--bg) 20%,var(--border) 40%,var(--bg) 60%);background-size:250% 100%;animation:shimmer 1.3s ease-in-out infinite;}
+  .avatar img,.pfp-circle img{animation:image-in .35s ease both;}
+  @keyframes route-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes row-in{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}
+  @keyframes image-in{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:none}}
+  @keyframes toast-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+  @keyframes shimmer{to{background-position:-200% 0}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+  .list{display:flex;flex-direction:column;}
+  .row-item{display:flex;align-items:center;gap:14px;padding:14px 6px;border-bottom:1px solid var(--border);cursor:pointer;min-width:0;}
+  .row-item:hover{background:var(--bg);}
+  .row-text{flex:1;min-width:0;}
+  .row-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row-sub{font-size:12.5px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row-tag{flex-shrink:0;font-size:11px;color:var(--text-muted);border:1px solid var(--border);padding:3px 8px;border-radius:6px;}
+  .row-item svg{color:var(--text-muted);flex-shrink:0;}
+
+  .comm-mark{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--text);color:var(--surface);font-family:var(--font-display);font-weight:600;font-size:15px;flex-shrink:0;}
+
+  .notice-banner{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:18px;min-width:0;}
+  .notice-banner>div:last-child{min-width:0;}
+  .notice-banner b{font-size:13px;display:block;font-weight:600;}
+  .notice-banner span{font-size:12.5px;color:var(--text-muted);}
+  .feed-item{display:flex;gap:12px;padding:14px 6px;border-bottom:1px solid var(--border);min-width:0;animation:row-in .4s cubic-bezier(.2,.8,.2,1) both;}
+  .feed-item>div:last-child{min-width:0;overflow-wrap:anywhere;}
+  .feed-item .fi-body{font-size:13.5px;line-height:1.55;margin-top:3px;}
+  .feed-item .fi-meta{font-size:12px;color:var(--text-muted);margin-top:6px;}
+
+  .profile-card{max-width:420px;margin:0 auto;}
+  .profile-pfp{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 0 22px;}
+  .profile-pfp h2{font-size:22px;margin-top:14px;}
+  .profile-pfp .dept{font-size:14.5px;font-weight:500;margin-top:4px;}
+  .profile-pfp .uni{font-size:13px;color:var(--text-muted);margin-top:2px;}
+  .info-row{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);font-size:13.5px;}
+  .info-row span:first-child{color:var(--text-muted);}
+  .info-row:last-child{border-bottom:none;}
+  .wa-btn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;background:var(--success);color:#fff;border:none;border-radius:9px;padding:13px;font-weight:600;font-size:14px;margin-top:20px;}
+
+  .empty-state{text-align:center;padding:60px 20px;color:var(--text-muted);}
+  .empty-state .glyph{width:52px;height:52px;border-radius:14px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
+  .empty-state h4{color:var(--text);font-size:15.5px;margin-bottom:5px;}
+
+  @media (hover:hover){
+    .clickable:hover,.card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(19,19,22,.08);}
+    .back-btn:hover{border-color:var(--primary);color:var(--primary);}
+    .chip:hover{border-color:var(--primary);color:var(--primary);}
+  }
+  @media(max-width:640px){
+    .landing-nav{padding:20px 18px;}
+    .landing-mid{align-items:flex-start;padding:12vh 18px 6vh;}
+    .landing-box{max-width:100%;}
+    .landing-box .pitch{font-size:14.5px;}
+    .landing-foot{padding:18px 18px calc(18px + env(safe-area-inset-bottom));}
+    .auth-top{padding:18px;}
+    .auth-mid{padding:2vh 18px calc(5vh + env(safe-area-inset-bottom));}
+    .auth-card h2{font-size:25px;}
+    .app-content{padding:20px 18px calc(104px + env(safe-area-inset-bottom));}
+    .app-top{padding:14px 18px;}
+    .page-head h2{font-size:22px;}
+    .filter-row{display:grid;grid-template-columns:1fr;gap:8px;}
+    .filter-row select{width:100%;}
+    .row-item{gap:10px;padding:14px 2px;}
+    .row-tag{max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .row-sub{padding-right:2px;}
+    .notice-banner{align-items:flex-start;padding:12px;}
+    .notice-banner .comm-mark{margin-top:1px;}
+    .feed-item{padding:14px 2px;}
+    .feed-item .fi-body{font-size:13px;}
+    .profile-card{width:100%;}
+    .info-row{gap:18px;}
+    .info-row b{max-width:65%;text-align:right;overflow-wrap:anywhere;}
+    .bottom-nav button{font-size:10px;}
+  }
+  @media(max-width:360px){
+    .app-content{padding-left:14px;padding-right:14px;}
+    .app-top{padding-left:14px;padding-right:14px;}
+    .bottom-nav{padding-left:2px;padding-right:2px;}
+    .bottom-nav button{padding-left:2px;padding-right:2px;font-size:9px;}
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const {useState,useRef,useEffect} = React;
+const BOOPA_CONFIG = window.BOOPA_CONFIG || {};
+const supabaseClient = BOOPA_CONFIG.supabaseUrl && BOOPA_CONFIG.supabasePublishableKey
+  ? window.supabase.createClient(BOOPA_CONFIG.supabaseUrl, BOOPA_CONFIG.supabasePublishableKey)
+  : null;
+const PROFILE_TABLE = "profiles";
+const getSession = async () => supabaseClient ? (await supabaseClient.auth.getSession()).data.session : null;
+const requireClient = () => {
+  if (!supabaseClient) throw new Error("Supabase is not configured for this deployment.");
+  return supabaseClient;
+};
+const normalizeProfile = profile => profile ? {...profile,isVerified:profile.is_verified || profile.verification_status==="active"} : profile;
+
+/* ---------- helpers ---------- */
+const PALETTE = ["#2E22C9","#E0553B","#1B9C63","#B4257A","#0E8FA6","#8A5CF6","#C97A1E"];
+function hash(s){let h=0;for(let i=0;i<s.length;i++){h=(h<<5)-h+s.charCodeAt(i);h|=0;}return h;}
+const colorFor = (seed) => PALETTE[Math.abs(hash(seed)) % PALETTE.length];
+function initials(name){return name.split(" ").map(p=>p[0]).slice(0,2).join("").toUpperCase();}
+
+const Icon = ({name,size=19}) => {
+  const s = {width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"1.8",strokeLinecap:"round",strokeLinejoin:"round"};
+  switch(name){
+    case "compass": return <svg {...s}><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-6 2 2-6z"/></svg>;
+    case "users": return <svg {...s}><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.6"/><path d="M21 20c0-2.6-1.8-4.8-4.2-5.6"/></svg>;
+    case "feed": return <svg {...s}><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="4" rx="1.5"/><rect x="13" y="11" width="7" height="9" rx="1.5"/><rect x="4" y="14" width="7" height="6" rx="1.5"/></svg>;
+    case "user": return <svg {...s}><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg>;
+    case "search": return <svg {...s}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>;
+    case "bell": return <svg {...s}><path d="M6 10a6 6 0 1112 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"/><path d="M10 18.5a2 2 0 004 0"/></svg>;
+    case "camera": return <svg {...s}><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.3"/></svg>;
+    case "arrow-left": return <svg {...s}><path d="M19 12H5M11 6l-6 6 6 6"/></svg>;
+    case "whatsapp": return <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor"><path d="M12 2a10 10 0 00-8.6 15L2 22l5.2-1.4A10 10 0 1012 2zm0 18a8 8 0 01-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1112 20zm4.4-5.9c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.5.1-.2.2-.6.8-.8 1-.1.2-.3.2-.5.1a6.5 6.5 0 01-3.3-2.9c-.2-.3.2-.3.5-1 .1-.1.1-.3 0-.4-.1-.1-.5-1.3-.7-1.7-.2-.5-.4-.4-.5-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3 1 2.5c.1.1 1.7 2.6 4.1 3.6.6.2 1 .4 1.4.5.6.2 1.1.1 1.5.1.5-.1 1.4-.6 1.6-1.1.2-.5.2-1 .1-1.1-.1-.1-.2-.2-.5-.3z"/></svg>;
+    case "logo": return <svg viewBox="0 0 24 24" width={size} height={size}><circle cx="7.5" cy="8" r="2.7" fill="currentColor"/><circle cx="16.5" cy="16" r="2.7" fill="currentColor"/><line x1="9.5" y1="9.8" x2="14.5" y2="14.2" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"/></svg>;
+    case "chevron": return <svg {...s}><path d="M9 6l6 6-6 6"/></svg>;
+    default: return null;
+  }
+};
+
+const Wordmark = () => (
+  <div className="wordmark">
+    <span className="mark"><Icon name="logo" size={15}/></span>Boopa
+  </div>
+);
+
+const VerifiedBadge = () => <span className="verified-badge" title="Verified on Boopa" aria-label="Verified">✓</span>;
+const authHeaders = () => {
+  const key = Object.keys(localStorage).find(item=>item.indexOf("auth-token")>=0);
+  try { const session = key ? JSON.parse(localStorage.getItem(key)) : null; return session?.access_token ? {Authorization:"Bearer "+session.access_token} : {}; } catch (error) { return {}; }
+};
+const Avatar = ({name,size=44,photo}) => (
+  <div className="avatar" style={{width:size,height:size,background:photo?"transparent":"var(--text)",fontSize:size*0.36}}>
+    {photo ? <img src={photo} alt=""/> : initials(name)}
+  </div>
+);
+
+const EmptyState = ({icon,title,body}) => (
+  <div className="empty-state">
+    <div className="glyph"><Icon name={icon} size={24}/></div>
+    <h4>{title}</h4>
+    <p>{body}</p>
+  </div>
+);
+
+/* ---------- profile form options ---------- */
+const UNIVERSITIES = ["Lead City University","Covenant University","University of Lagos"];
+const LEVELS = ["100 Level","200 Level","300 Level","400 Level"];
+const DEPTS = ["Computer Science","Software Engineering","Accounting","Mass Communication","Mechanical Engineering","Marketing","Law"];
+
+/* ---------- Landing ---------- */
+function Landing({onSignup,onLogin}){
+  return (
+    <div className="landing">
+      <div className="landing-nav"><Wordmark/></div>
+      <div className="landing-mid">
+        <div className="landing-box">
+          <h1>Boopa</h1>
+          <div className="tagline">Find your people.</div>
+          <p className="pitch">Meet students who share your ambitions — coursemates, project partners, and the people in your community.</p>
+          <div className="landing-lines">
+            <span>Discover like-minded people</span>
+            <span>Made by students, for students</span>
+          </div>
+          <div className="landing-cta">
+            <button className="cta-primary" onClick={onSignup}>Join us</button>
+            <button className="cta-secondary" onClick={onLogin}>Already on Boopa? Log in</button>
+          </div>
+        </div>
+      </div>
+      <div className="landing-foot">© 2026 Boopa</div>
+    </div>
+  );
+}
+
+/* ---------- Sign up ---------- */
+function SignUp({onBack,onDone}){
+  const [photo,setPhoto] = useState(null);
+  const [name,setName] = useState("");
+  const [level,setLevel] = useState(LEVELS[0]);
+  const [dept,setDept] = useState(DEPTS[0]);
+  const [uni,setUni] = useState(UNIVERSITIES[0]);
+  const [number,setNumber] = useState("");
+  const [email,setEmail] = useState("");
+  const [password,setPassword] = useState("");
+  const [error,setError] = useState("");
+  const fileRef = useRef(null);
+
+  const pickPhoto = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if(!name.trim() || !number.trim()) return;
+    try{
+      const client=requireClient(); const {data,error:authError}=await client.auth.signUp({email:email.trim(),password});
+      if(authError)throw authError; if(!data.user)throw new Error("Unable to create your account.");
+      const {error:profileError}=await client.from(PROFILE_TABLE).insert({id:data.user.id,name:name.trim(),level,dept,uni,number:number.trim(),email:email.trim(),avatar_url:photo});
+      if(profileError)throw profileError;
+      onDone({id:data.user.id,name:name.trim(),level,dept,uni,number:number.trim(),email:email.trim(),photo});
+    }catch(err){setError(err.message);}
+  };
+
+  return (
+    <div className="auth-shell">
+      <div className="auth-top"><button className="back-btn" onClick={onBack}><Icon name="arrow-left"/></button><Wordmark/></div>
+      <div className="auth-mid">
+        <form className="auth-card" onSubmit={submit}>
+          <h2>Join us</h2>
+          <p className="sub">Set up your profile so other students can find and connect with you.</p>
+          <div className="pfp-upload">
+            <div className="pfp-circle" onClick={()=>fileRef.current.click()}>
+              {photo ? <img src={photo} alt=""/> : <Icon name="camera" size={24}/>}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={pickPhoto}/>
+            <span className="hint">Add a profile photo</span>
+          </div>
+          <div className="field">
+            <label htmlFor="signup-name">Full name</label>
+            <input id="signup-name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Amaka Chukwu" required />
+          </div>
+          <div className="field">
+            <label htmlFor="signup-level">Level</label>
+            <select id="signup-level" value={level} onChange={e=>setLevel(e.target.value)}>{LEVELS.map(item=><option key={item}>{item}</option>)}</select>
+          </div>
+          <div className="field">
+            <label htmlFor="signup-dept">Department</label>
+            <select id="signup-dept" value={dept} onChange={e=>setDept(e.target.value)}>{DEPTS.map(item=><option key={item}>{item}</option>)}</select>
+          </div>
+          <div className="field">
+            <label htmlFor="signup-uni">University</label>
+            <select id="signup-uni" value={uni} onChange={e=>setUni(e.target.value)}>{UNIVERSITIES.map(item=><option key={item}>{item}</option>)}</select>
+          </div>
+          <div className="field">
+            <label htmlFor="signup-email">Email</label>
+            <input id="signup-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" required />
+          </div>
+          <div className="field">
+            <label htmlFor="signup-password">Password</label>
+            <input id="signup-password" type="password" minLength="8" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 8 characters" required />
+          </div>
+          <div className="field">
+            <label htmlFor="signup-number">WhatsApp number</label>
+            <input id="signup-number" type="tel" value={number} onChange={e=>setNumber(e.target.value)} placeholder="+234 800 000 0000" required />
+          </div>
+          <p className="field-note">Your number is only shared when another student chooses to connect with you.</p>
+          {error&&<p className="verification-status error">{error}</p>}
+          <button className="submit-btn" type="submit">Create my profile</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Login({onBack,onDone}){
+  const [number,setNumber] = useState("");
+  const [email,setEmail] = useState(""); const [password,setPassword] = useState(""); const [error,setError] = useState("");
+  const submit = e => {
+    e.preventDefault();
+    if(!number.trim()) return;
+    (async()=>{try{const {data,error:authError}=await requireClient().auth.signInWithPassword({email,password});if(authError)throw authError;const {data:profile,error:profileError}=await requireClient().from(PROFILE_TABLE).select("*").eq("id",data.user.id).single();if(profileError)throw profileError;onDone({...normalizeProfile(profile),number:profile.number||number.trim()});}catch(err){setError(err.message);}})();
+  };
+  return <div className="auth-shell"><div className="auth-top"><button className="back-btn" onClick={onBack}><Icon name="arrow-left"/></button><Wordmark/></div><div className="auth-mid"><form className="auth-card" onSubmit={submit}>
+    <h2>Welcome back</h2><p className="sub">Log in with your WhatsApp number to continue.</p>
+    <div className="field" style={{marginTop:28}}><label htmlFor="login-email">Email</label><input id="login-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" required /></div><div className="field"><label htmlFor="login-password">Password</label><input id="login-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} required /></div><div className="field"><label htmlFor="login-number">WhatsApp number</label><input id="login-number" type="tel" value={number} onChange={e=>setNumber(e.target.value)} placeholder="+234 800 000 0000" required /></div>
+    {error&&<p className="verification-status error">{error}</p>}
+    <button className="submit-btn" type="submit">Log in</button><div className="auth-switch">New to Boopa? <button type="button" onClick={()=>onBack()}>Create a profile</button></div>
+  </form></div></div>;
+}
+
+function PersonRow({student,onClick}){
+  return <div className="row-item" onClick={onClick} role="button" tabIndex="0" onKeyDown={e=>e.key==="Enter"&&onClick()}><Avatar name={student.name} photo={student.photo}/><div className="row-text"><div className="row-title">{student.name}{student.isVerified&&<VerifiedBadge/>}</div><div className="row-sub">{student.dept} · {student.uni}</div></div><span className="row-tag">{student.level.replace(" Level","")}</span><Icon name="chevron" size={17}/></div>;
+}
+
+function Discover({onPerson}){
+  const [query,setQuery] = useState(""); const [uni,setUni] = useState("All universities"); const [level,setLevel] = useState("All levels"); const [dept,setDept] = useState("All departments"); const [students,setStudents] = useState([]); const [loading,setLoading] = useState(true); const [error,setError] = useState("");
+  const load=async()=>{try{const client=requireClient();const session=await getSession();if(!session)throw new Error("Please sign in to discover students.");const {data,error}=await client.from(PROFILE_TABLE).select("*").neq("id",session.user.id).order("created_at",{ascending:false});if(error)throw error;setStudents((data||[]).map(normalizeProfile));}catch(err){setError(err.message);}finally{setLoading(false);}};
+  useEffect(()=>{load();if(!supabaseClient)return;const channel=supabaseClient.channel("profiles-discover").on("postgres_changes",{event:"*",schema:"public",table:PROFILE_TABLE},load).subscribe();return()=>supabaseClient.removeChannel(channel);},[]);
+  const results=students.filter(student=>(student.name+" "+(student.dept||"")+" "+(student.uni||"")).toLowerCase().includes(query.toLowerCase())&&(uni==="All universities"||student.uni===uni)&&(level==="All levels"||student.level===level)&&(dept==="All departments"||student.dept===dept));
+  return <div className="motion-in"><div className="page-head"><h2>Find your people</h2><p>Discover real students who share your campus and interests.</p></div><div className="search-box"><Icon name="search" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search names, departments or interests" aria-label="Search students"/></div><div className="filter-row"><select value={uni} onChange={e=>setUni(e.target.value)}><option>All universities</option>{UNIVERSITIES.map(item=><option key={item}>{item}</option>)}</select><select value={level} onChange={e=>setLevel(e.target.value)}><option>All levels</option>{LEVELS.map(item=><option key={item}>{item}</option>)}</select><select value={dept} onChange={e=>setDept(e.target.value)}><option>All departments</option>{DEPTS.map(item=><option key={item}>{item}</option>)}</select></div><div className="list">{loading?[1,2,3].map(item=><div className="skeleton" key={item}/>):error?<EmptyState icon="user" title="Unable to load students" body={error}/>:results.length?results.map((student,index)=><div className="stagger-in" style={{"--item-index":index}} key={student.id}><PersonRow student={student} onClick={()=>onPerson(student)}/></div>):<EmptyState icon="users" title="No other students have joined yet" body="Invite your friends to Boopa."/>}</div></div>;
+}
+
+function Communities({onOpen}){
+  const [category,setCategory] = useState("All"); const [items,setItems]=useState([]); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const load=async()=>{try{const {data,error}=await requireClient().from("communities").select("*").order("created_at",{ascending:false});if(error)throw error;setItems(data||[]);}catch(err){setError(err.message);}finally{setLoading(false);}};
+  useEffect(()=>{load();},[]);
+  const categories=["All",...Array.from(new Set(items.map(item=>item.cat)))]; const filtered=category==="All"?items:items.filter(item=>item.cat===category);
+  return <div className="motion-in"><div className="page-head"><h2>Communities</h2><p>Find a space for your interests and ideas.</p></div><div className="chip-row">{categories.map(item=><button key={item} className={"chip "+(category===item?"active":"")} onClick={()=>setCategory(item)}>{item}</button>)}</div><div className="list">{loading?[1,2,3].map(item=><div className="skeleton" key={item}/>):error?<EmptyState icon="users" title="Unable to load communities" body={error}/>:filtered.length?filtered.map(item=><div className="row-item clickable" key={item.id} onClick={()=>onOpen(item)} role="button" tabIndex="0"><div className="comm-mark">{item.name.charAt(0)}</div><div className="row-text"><div className="row-title">{item.name}{item.is_verified&&<VerifiedBadge/>}</div><div className="row-sub">{item.members||0} members · {item.description||item.desc}</div></div><span className="row-tag">{item.cat||item.category}</span><Icon name="chevron" size={17}/></div>):<EmptyState icon="users" title="No communities yet" body="Create the first student community on Boopa."/>}</div></div>;
+}
+
+function CommunityDetail({community,onBack}){
+  const [posts,setPosts]=useState([]); const [loading,setLoading]=useState(true);
+  useEffect(()=>{(async()=>{try{const {data}=await requireClient().from("posts").select("*,profiles(name,avatar_url,is_verified)").eq("community_id",community.id).order("created_at",{ascending:false});setPosts(data||[]);}finally{setLoading(false);}})();},[community.id]);
+  const whatsapp=community.whatsapp_group_link;
+  return <div className="motion-in"><div className="row-back"><button className="back-btn" onClick={onBack}><Icon name="arrow-left" size={18}/></button><h2>{community.name}{community.is_verified&&<VerifiedBadge/>}</h2></div><div className="notice-banner"><div className="comm-mark">{community.name.charAt(0)}</div><div><b>{community.members||0} members · {community.cat||community.category}</b><span>{community.description||community.desc}</span></div></div>{whatsapp?<button className="submit-btn" onClick={()=>window.open(whatsapp,"_blank","noopener,noreferrer")}>Join WhatsApp Group</button>:<div className="verification-status">This community has not added a WhatsApp group yet.</div>}<div className="list" style={{marginTop:18}}>{loading?<div className="skeleton"/>:posts.length?posts.map(post=><div className="feed-item" key={post.id}><Avatar name={post.profiles?.name||"Student"} photo={post.profiles?.avatar_url} size={38}/><div><b>{post.profiles?.name||"Student"}{post.profiles?.is_verified&&<VerifiedBadge/>}</b><div className="fi-body">{post.body}</div><div className="fi-meta">{new Date(post.created_at).toLocaleString()}</div></div></div>):<EmptyState icon="feed" title="No posts yet" body="Be the first to share something with this community."/>}</div></div>;
+}
+
+function Feed({onOpen}){
+  const [posts,setPosts]=useState([]); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const load=async()=>{try{const {data,error}=await requireClient().from("posts").select("*,profiles(name,avatar_url,is_verified),communities(id,name)").order("created_at",{ascending:false}).limit(50);if(error)throw error;setPosts(data||[]);}catch(err){setError(err.message);}finally{setLoading(false);}};
+  useEffect(()=>{load();if(!supabaseClient)return;const channel=supabaseClient.channel("feed-posts").on("postgres_changes",{event:"*",schema:"public",table:"posts"},load).subscribe();return()=>supabaseClient.removeChannel(channel);},[]);
+  return <div className="motion-in"><div className="page-head"><h2>Community feed</h2><p>See what students are building, sharing and looking for.</p></div><div className="list">{loading?[1,2,3].map(item=><div className="skeleton" key={item}/>):error?<EmptyState icon="feed" title="Unable to load feed" body={error}/>:posts.length?posts.map(post=><div className="feed-item" key={post.id}><Avatar name={post.profiles?.name||"Student"} photo={post.profiles?.avatar_url} size={40}/><div><b>{post.profiles?.name||"Student"}{post.profiles?.is_verified&&<VerifiedBadge/>}</b><div className="fi-body">{post.body}</div><div className="fi-meta">{post.communities&&<button className="cta-secondary" onClick={()=>onOpen(post.communities)}>{post.communities.name}</button>} · {new Date(post.created_at).toLocaleString()}</div></div></div>):<EmptyState icon="feed" title="Your feed is empty" body="Join a community or create the first post."/>}</div></div>;
+}
+
+function Notifications(){
+  const [items,setItems]=useState([]); const [error,setError]=useState("");
+  const load=async()=>{try{const session=await getSession();const {data,error}=await requireClient().from("notifications").select("*,profiles!notifications_actor_id_fkey(name,is_verified)").eq("user_id",session.user.id).order("created_at",{ascending:false}).limit(50);if(error)throw error;setItems(data||[]);}catch(err){setError(err.message);}};
+  useEffect(()=>{load();},[]);
+  const markRead=async item=>{if(!item.read_at){await requireClient().from("notifications").update({read_at:new Date().toISOString()}).eq("id",item.id);setItems(items.map(current=>current.id===item.id?{...current,read_at:new Date().toISOString()}:current));}};
+  return <div className="motion-in"><div className="page-head"><h2>Notifications</h2><p>Stay up to date with your Boopa activity.</p></div>{error?<EmptyState icon="bell" title="Unable to load notifications" body={error}/>:items.length?<div className="list">{items.map(item=><div className="row-item" key={item.id} onClick={()=>markRead(item)} style={{opacity:item.read_at?0.7:1}}><div className="comm-mark"><Icon name="bell" size={17}/></div><div className="row-text"><div className="row-title">{item.message}</div><div className="row-sub">{new Date(item.created_at).toLocaleString()}</div></div></div>)}</div>:<EmptyState icon="bell" title="No notifications yet" body="Friend requests and important updates will appear here."/>}</div>;
+}
+
+function Verification({profile,isVerified,status,onRefresh}){
+  const [busy,setBusy]=useState(false); const [message,setMessage]=useState("");
+  const publicKey=window.BOOPA_CONFIG&&window.BOOPA_CONFIG.paystackPublicKey;
+  const subscribe=async()=>{
+    setBusy(true);setMessage("");
+    try{
+      const response=await fetch("/functions/v1/verification-initialize",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({email:profile.email})});
+      if(!response.ok) throw new Error("Unable to start verification checkout.");
+      const data=await response.json();
+      if(!publicKey||!window.PaystackPop) throw new Error("Paystack is not configured for this deployment.");
+      const popup=new PaystackPop();
+      popup.resumeTransaction(data.access_code,{onSuccess:async(transaction)=>{setMessage("Payment received. Confirming your subscription…");const confirmation=await fetch("/functions/v1/verification-confirm",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({reference:transaction.reference})});if(!confirmation.ok)throw new Error("Payment could not be verified yet.");await onRefresh();setBusy(false);},onCancel:()=>{setMessage("Payment was cancelled.");setBusy(false);}});
+    }catch(error){setMessage(error.message);setBusy(false);}
+  };
+  const cancel=async()=>{setBusy(true);setMessage("");try{const response=await fetch("/functions/v1/verification-cancel",{method:"POST",headers:authHeaders()});if(!response.ok)throw new Error("Unable to cancel your subscription.");await onRefresh();setMessage("Your subscription cancellation request was sent.");}catch(error){setMessage(error.message);}finally{setBusy(false);}};
+  return <div className="verification-card"><h3><VerifiedBadge/> Get Verified</h3><p>Stand out with a blue verification badge that confirms your Boopa profile has an active subscription.</p><ul><li>Blue badge beside your name</li><li>More trust when connecting with students</li><li>Active subscription checked automatically</li></ul>{isVerified?<><div className="verification-status success">Your verification is active{status.next_payment_date?" · renews "+new Date(status.next_payment_date).toLocaleDateString():""}.</div><button className="cta-secondary" onClick={cancel} disabled={busy}>{busy?"Processing…":"Cancel subscription"}</button></>:<><button className="submit-btn" onClick={subscribe} disabled={busy}>{busy?"Opening checkout…":"Subscribe for Verification · ₦500/month"}</button>{status&&status.status&&<div className={"verification-status "+(status.status==="failed"?"error":"")}>Subscription status: {status.status}.</div>}</>}{message&&<div className="verification-status">{message}</div>}</div>;
+}
+
+function Profile({profile,onLogout,onSave,isVerified,status,onRefresh}){
+  const [editing,setEditing]=useState(false); const [draft,setDraft]=useState(profile);
+  const update=key=>e=>setDraft({...draft,[key]:e.target.value});
+  const save=e=>{e.preventDefault();onSave(draft);setEditing(false);};
+  return <div className="profile-card"><div className="profile-pfp"><Avatar name={profile.name} photo={profile.photo} size={88}/><h2>{profile.name}{isVerified&&<VerifiedBadge/>}</h2><div className="dept">{profile.dept}</div><div className="uni">{profile.uni}</div></div>{editing?<form className="edit-fields" onSubmit={save}><div className="field"><label htmlFor="edit-name">Name</label><input id="edit-name" value={draft.name} onChange={update("name")} required /></div><div className="field"><label htmlFor="edit-email">Email for billing</label><input id="edit-email" type="email" value={draft.email||""} onChange={update("email")} placeholder="you@example.com" required /></div><button className="submit-btn" type="submit">Save changes</button></form>:<><div className="info-row"><span>Level</span><b>{profile.level}</b></div><div className="info-row"><span>WhatsApp</span><b>{profile.number}</b></div><Verification profile={profile} isVerified={isVerified} status={status} onRefresh={onRefresh}/><button className="cta-secondary" onClick={()=>setEditing(true)} style={{marginTop:16}}>Edit profile</button></>}<button className="submit-btn" onClick={onLogout} style={{marginTop:20}}>Log out</button></div>;
+}
+
+function PersonProfile({student,onBack}){
+  const [friendStatus,setFriendStatus]=useState("loading"); const [message,setMessage]=useState("");
+  useEffect(()=>{(async()=>{try{const session=await getSession();const {data}=await requireClient().from("friend_requests").select("status,sender_id,receiver_id").or("and(sender_id.eq."+session.user.id+",receiver_id.eq."+student.id+"),and(sender_id.eq."+student.id+",receiver_id.eq."+session.user.id+")").order("created_at",{ascending:false}).limit(1).maybeSingle();setFriendStatus(data?.status==="accepted"?"accepted":data?.sender_id===session.user.id?"sent":data?.status||"none");}catch(error){setFriendStatus("none");}})();},[student.id]);
+  const addFriend=async()=>{try{const session=await getSession();const {error}=await requireClient().from("friend_requests").insert({sender_id:session.user.id,receiver_id:student.id,status:"pending"});if(error)throw error;setFriendStatus("sent");setMessage("Friend request sent.");}catch(error){setMessage(error.message);}};
+  const connect=()=>window.open("https://wa.me/"+student.number.replace(/\D/g,""),"_blank","noopener,noreferrer");
+  return <div className="profile-card"><div className="row-back"><button className="back-btn" onClick={onBack}><Icon name="arrow-left" size={18}/></button><h2>Student profile</h2></div><div className="profile-pfp"><Avatar name={student.name} photo={student.photo} size={88}/><h2>{student.name}{student.isVerified&&<VerifiedBadge/>}</h2><div className="dept">{student.dept}</div><div className="uni">{student.uni}</div></div><div className="info-row"><span>Level</span><b>{student.level}</b></div><div className="info-row"><span>Community</span><b>{student.community||"Student"}</b></div>{friendStatus==="accepted"?<button className="wa-btn" onClick={connect}><Icon name="whatsapp" size={19}/> Connect on WhatsApp</button>:<button className="submit-btn" onClick={addFriend} disabled={friendStatus!=="none"}>{friendStatus==="sent"?"Request Sent":friendStatus==="accepted"?"Friends":"Add Friend"}</button>}{message&&<div className="verification-status">{message}</div>}</div>;
+}
+
+function App({profile,onLogout}){
+  const [tab,setTab]=useState("discover"); const [selected,setSelected]=useState(null); const [theme,setTheme]=useState(localStorage.getItem("boopa-theme")||"light"); const [status,setStatus]=useState(null);
+  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("boopa-theme",theme)},[theme]);
+  const refreshStatus=async()=>{try{const response=await fetch("/functions/v1/verification-status",{headers:authHeaders()});if(!response.ok)throw new Error("status unavailable");setStatus(await response.json());}catch(error){setStatus({status:"unavailable"});}};
+  useEffect(()=>{refreshStatus();},[]);
+  const isVerified=!!status&&status.status==="active";
+  const saveProfile=value=>{localStorage.setItem("boopa-profile",JSON.stringify(value));window.location.reload();};
+  const openCommunity=community=>{setSelected({type:"community",value:community});setTab("communities")};
+  const content=selected?(selected.type==="person"?<PersonProfile student={selected.value} onBack={()=>setSelected(null)}/>:<CommunityDetail community={selected.value} onBack={()=>setSelected(null)}/>):tab==="discover"?<Discover onPerson={student=>setSelected({type:"person",value:student})}/>:tab==="communities"?<Communities onOpen={openCommunity}/>:tab==="feed"?<Feed onOpen={openCommunity}/>:tab==="notifications"?<Notifications/>:<Profile profile={profile} onLogout={onLogout} onSave={saveProfile} isVerified={isVerified} status={status} onRefresh={refreshStatus}/>;
+  const nav=[{id:"discover",icon:"compass",label:"Discover"},{id:"communities",icon:"users",label:"Communities"},{id:"feed",icon:"feed",label:"Feed"},{id:"notifications",icon:"bell",label:"Alerts"},{id:"profile",icon:"user",label:"Profile"}];
+  return <div className="app"><header className="app-top"><Wordmark/><div style={{marginLeft:"auto",display:"flex",gap:8}}><button className="back-btn" aria-label="Toggle theme" onClick={()=>setTheme(theme==="dark"?"light":"dark")}>{theme==="dark"?"☼":"☾"}</button><button className="back-btn" aria-label="Log out" onClick={onLogout}><Icon name="arrow-left" size={17}/></button></div></header><main className="app-content">{content}</main><nav className="bottom-nav">{nav.map(item=><button key={item.id} className={tab===item.id&&!selected?"active":""} onClick={()=>{setSelected(null);setTab(item.id)}}><Icon name={item.icon} size={19}/>{item.label}</button>)}</nav></div>;
+}
+
+function Root(){
+  const [screen,setScreen]=useState("landing"); const [profile,setProfile]=useState(null); const [loading,setLoading]=useState(true);
+  useEffect(()=>{if(!supabaseClient){setLoading(false);return;}let mounted=true;(async()=>{const session=await getSession();if(session){const {data}=await supabaseClient.from(PROFILE_TABLE).select("*").eq("id",session.user.id).maybeSingle();if(mounted&&data){setProfile(normalizeProfile(data));setScreen("app");}}if(mounted)setLoading(false);})();const {data}=supabaseClient.auth.onAuthStateChange((_event,session)=>{if(!session&&mounted){setProfile(null);setScreen("landing");}});return()=>{mounted=false;data.subscription.unsubscribe();};},[]);
+  const finish=value=>{setProfile(value);setScreen("app")};
+  if(screen==="signup") return <SignUp onBack={()=>setScreen("landing")} onDone={finish}/>;
+  if(screen==="login") return <Login onBack={()=>setScreen("signup")} onDone={finish}/>;
+  if(loading) return <div className="landing"><div className="landing-mid"><div className="landing-box"><div className="skeleton"/></div></div></div>;
+  if(screen==="app"&&profile) return <App profile={profile} onLogout={async()=>{if(supabaseClient)await supabaseClient.auth.signOut();setProfile(null);setScreen("landing")}} />;
+  return <Landing onSignup={()=>setScreen("signup")} onLogin={()=>setScreen("login")}/>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Root/>);
+</script>
+</body>
+</html>
