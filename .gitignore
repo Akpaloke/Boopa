@@ -1,0 +1,8 @@
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Local and generated tooling files
+.supabase/
+node_modules/
