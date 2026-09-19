@@ -263,6 +263,7 @@ const authErrorMessage = error => {
   if (error?.message === "Invalid login credentials") return "Incorrect email or password.";
   if (error?.message?.toLowerCase().includes("user already registered")) return "An account with this email already exists. Please log in.";
   return error?.message || "Authentication failed. Please try again.";
+};
 const normalizeProfile = profile => profile ? {...profile,isVerified:profile.is_verified || profile.verification_status==="active",full_name:profile.full_name||"",university:profile.university||"",department:profile.department||"",avatar_url:profile.avatar_url||""} : profile;
 
 /* ---------- helpers ---------- */
@@ -589,14 +590,14 @@ function App({profile,onLogout}){
 }
 
 function Root(){
-  const [screen,setScreen]=useState("landing"); const [profile,setProfile]=useState(null); const [loading,setLoading]=useState(true);
-  useEffect(()=>{if(!supabaseClient){setLoading(false);return;}let mounted=true;(async()=>{const session=await getSession();if(session){const {data}=await supabaseClient.from(PROFILE_TABLE).select("*").eq("id",session.user.id).maybeSingle();if(mounted&&data){setProfile(normalizeProfile(data));setScreen("app");}}if(mounted)setLoading(false);})();const {data}=supabaseClient.auth.onAuthStateChange((_event,session)=>{if(!session&&mounted){setProfile(null);setScreen("landing");}});return()=>{mounted=false;data.subscription.unsubscribe();};},[]);
+  const [screen,setScreen]=useState("landing"); const [profile,setProfile]=useState(null); const [loading,setLoading]=useState(true); const [startupError,setStartupError]=useState("");
+  useEffect(()=>{if(!supabaseClient){setStartupError("Supabase is not configured for this deployment.");setLoading(false);return;}let mounted=true;const timeout=new Promise(resolve=>setTimeout(()=>resolve(null),8000));(async()=>{try{const session=await Promise.race([getSession(),timeout]);if(session&&mounted){const {data,error}=await supabaseClient.from(PROFILE_TABLE).select("*").eq("id",session.user.id).maybeSingle();if(error)throw error;if(data){setProfile(normalizeProfile(data));setScreen("app");}}}catch(error){console.error("Boopa startup authentication failed:",{message:error?.message,code:error?.code,status:error?.status});if(mounted)setStartupError("We could not restore your session. You can still log in again.");}finally{if(mounted)setLoading(false);}})();const {data}=supabaseClient.auth.onAuthStateChange((_event,session)=>{if(!mounted)return;if(!session){setProfile(null);setScreen("landing");}});return()=>{mounted=false;data.subscription.unsubscribe();};},[]);
   const finish=value=>{setProfile(value);setScreen("app")};
   if(screen==="signup") return <SignUp onBack={()=>setScreen("landing")} onDone={finish}/>;
   if(screen==="login") return <Login onBack={()=>setScreen("signup")} onDone={finish}/>;
   if(loading) return <div className="landing"><div className="landing-mid"><div className="landing-box"><div className="skeleton"/></div></div></div>;
   if(screen==="app"&&profile) return <App profile={profile} onLogout={async()=>{if(supabaseClient)await supabaseClient.auth.signOut();setProfile(null);setScreen("landing")}} />;
-  return <Landing onSignup={()=>setScreen("signup")} onLogin={()=>setScreen("login")}/>;
+  return <><Landing onSignup={()=>setScreen("signup")} onLogin={()=>setScreen("login")}/>{startupError&&<div className="verification-status error" style={{position:"fixed",bottom:12,left:12,right:12,textAlign:"center"}}>{startupError}</div>}</>;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<Root/>);
