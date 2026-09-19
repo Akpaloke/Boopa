@@ -1,7 +1,7 @@
-import { admin, AMOUNT, CURRENCY, PLAN_CODE, authenticatedUser, json, paystack } from "../_shared/paystack.ts";
+import { admin, AMOUNT, CURRENCY, PLAN_CODE, authenticatedUser, json, options, paystack } from "../_shared/paystack.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" } });
+  if (req.method === "OPTIONS") return options();
   try {
     const user = await authenticatedUser(req);
     const { reference } = await req.json();

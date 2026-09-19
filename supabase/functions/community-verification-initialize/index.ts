@@ -1,6 +1,7 @@
-import { admin, CURRENCY, PLAN_CODE, authenticatedUser, json, paystack } from "../_shared/paystack.ts";
+import { admin, CURRENCY, PLAN_CODE, authenticatedUser, json, options, paystack } from "../_shared/paystack.ts";
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return options();
   try {
     const user = await authenticatedUser(req);
     const { community_id } = await req.json();
