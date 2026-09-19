@@ -8,8 +8,9 @@ Deno.serve(async (req) => {
     const data = await paystack("/transaction/initialize", { method: "POST", body: JSON.stringify({ email: user.email, amount: AMOUNT, currency: CURRENCY, plan: PLAN_CODE, metadata: { user_id: user.id } }) });
     const { error: insertError } = await admin.from("verification_subscriptions").insert({ user_id: user.id, paystack_plan_code: PLAN_CODE, status: "pending", amount: AMOUNT, currency: CURRENCY });
     if (insertError) throw insertError;
-    return json({ access_code: data.access_code, reference: data.reference });
+    return json({ access_code: data.access_code, authorization_url: data.authorization_url, reference: data.reference });
   } catch (error) {
+    console.error("Verification initialization failed:", error instanceof Error ? error.message : "unknown error");
     if (error instanceof Response) return error;
     return json({ error: "Unable to initialize verification payment." }, 500);
   }

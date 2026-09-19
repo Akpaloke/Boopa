@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
     if (profileError) throw profileError;
     return json({ status: "active" });
   } catch (error) {
+    console.error("Verification confirmation failed:", error instanceof Error ? error.message : "unknown error");
     if (error instanceof Response) return error;
     return json({ error: "Unable to verify payment." }, 500);
   }
