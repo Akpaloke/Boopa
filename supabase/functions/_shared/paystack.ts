@@ -30,6 +30,6 @@ export async function paystack(path: string, init: RequestInit = {}) {
     headers: { Authorization: `Bearer ${Deno.env.get("PAYSTACK_SECRET_KEY")}`, "Content-Type": "application/json", ...(init.headers || {}) },
   });
   const body = await response.json();
-  if (!response.ok || !body.status) throw new Error("Paystack request failed");
+  if (!response.ok || !body.status) throw new Error(body.message || "Paystack request failed");
   return body.data;
 }

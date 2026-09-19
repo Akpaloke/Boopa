@@ -19,7 +19,8 @@ Deno.serve(async (req) => {
   const isCommunityVerification = data.metadata?.verification_type === "community";
   if (!isCommunityVerification && event.event === "charge.success" && (data.amount !== 20000 || data.currency !== "NGN" || planCode !== PLAN_CODE)) return new Response("ok");
   const status = event.event === "charge.success" || event.event === "subscription.create" ? "active" :
-    ["subscription.disable", "subscription.not_renewed", "invoice.payment_failed"].includes(event.event) ? "inactive" : null;
+    event.event === "invoice.payment_failed" ? "failed" :
+    ["subscription.disable", "subscription.not_renewed"].includes(event.event) ? "cancelled" : null;
   if (status && !isCommunityVerification) {
     await admin.from("verification_subscriptions").update({ status, paystack_customer_code: data.customer?.customer_code, paystack_subscription_code: data.subscription?.subscription_code || data.subscription_code, paystack_email_token: data.subscription?.email_token || data.email_token, paystack_plan_code: planCode || PLAN_CODE, next_payment_date: data.next_payment_date, updated_at: new Date().toISOString() }).eq("user_id", user.id);
     await admin.from("profiles").update({ is_verified: status === "active", verification_status: status || "inactive" }).eq("id", user.id);
