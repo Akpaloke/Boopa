@@ -258,6 +258,11 @@ const requireClient = () => {
   if (!supabaseClient) throw new Error("Supabase is not configured for this deployment.");
   return supabaseClient;
 };
+const authErrorMessage = error => {
+  if (error?.name === "TypeError" && error.message === "Failed to fetch") return "Unable to connect to Supabase authentication. Check the deployed Supabase URL and publishable key.";
+  if (error?.message === "Invalid login credentials") return "Incorrect email or password.";
+  if (error?.message?.toLowerCase().includes("user already registered")) return "An account with this email already exists. Please log in.";
+  return error?.message || "Authentication failed. Please try again.";
 const normalizeProfile = profile => profile ? {...profile,isVerified:profile.is_verified || profile.verification_status==="active",full_name:profile.full_name||"",university:profile.university||"",department:profile.department||"",avatar_url:profile.avatar_url||""} : profile;
 
 /* ---------- helpers ---------- */
@@ -379,6 +384,10 @@ function SignUp({onBack,onDone}){
       }
       const user=authData?.user;
       if(!user)throw new Error("User account was not created.");
+      if(!authData.session){
+        setError("Account created. Check your email to confirm your account, then log in to continue.");
+        return;
+      }
       const profilePayload={id:user.id,full_name:fullName,email:emailValue,university:universityValue,department:departmentValue,level:numericLevel,number:numberValue||null};
       console.log("Profile payload:",profilePayload);
       const {data:existingProfile,error:profileLookupError}=await client.from(PROFILE_TABLE).select("id").eq("id",user.id).maybeSingle();
@@ -401,9 +410,8 @@ function SignUp({onBack,onDone}){
           throw profileError;
         }
       }
-      if(!authData.session){setError("Account created. Check your email to confirm your account, then return to Boopa to continue.");return;}
       onDone(normalizeProfile({...profilePayload,avatar_url:photo}));
-    }catch(err){console.error("Boopa signup failed:",err);setError(err.message||"We could not create your profile. Please try again.");}finally{setSaving(false);}
+    }catch(err){console.error("Boopa signup failed:",{message:err?.message,code:err?.code,status:err?.status});setError(authErrorMessage(err));}finally{setSaving(false);}
   };
 
   return (
@@ -459,17 +467,28 @@ function SignUp({onBack,onDone}){
 
 function Login({onBack,onDone}){
   const [number,setNumber] = useState("");
-  const [email,setEmail] = useState(""); const [password,setPassword] = useState(""); const [error,setError] = useState("");
-  const submit = e => {
+  const [email,setEmail] = useState(""); const [password,setPassword] = useState(""); const [error,setError] = useState(""); const [saving,setSaving] = useState(false);
+  const submit = async e => {
     e.preventDefault();
-    if(!number.trim()) return;
-    (async()=>{try{const {data,error:authError}=await requireClient().auth.signInWithPassword({email,password});if(authError)throw authError;const {data:profile,error:profileError}=await requireClient().from(PROFILE_TABLE).select("*").eq("id",data.user.id).single();if(profileError)throw profileError;onDone({...normalizeProfile(profile),number:profile.number||number.trim()});}catch(err){setError(err.message);}})();
+    setError("");
+    if(!email.trim()||!password){setError("Enter your email and password.");return;}
+    setSaving(true);
+    try{
+      const client=requireClient();
+      const {data,error:authError}=await client.auth.signInWithPassword({email:email.trim(),password});
+      if(authError)throw authError;
+      if(!data?.session||!data.user)throw new Error("Supabase did not create a login session.");
+      const {data:profile,error:profileError}=await client.from(PROFILE_TABLE).select("*").eq("id",data.user.id).maybeSingle();
+      if(profileError)throw profileError;
+      if(!profile)throw new Error("Your account is authenticated, but your Boopa profile could not be found.");
+      onDone(normalizeProfile({...profile,number:profile.number||number.trim()}));
+    }catch(err){console.error("Boopa login failed:",{message:err?.message,code:err?.code,status:err?.status});setError(authErrorMessage(err));}finally{setSaving(false);}
   };
   return <div className="auth-shell"><div className="auth-top"><button className="back-btn" onClick={onBack}><Icon name="arrow-left"/></button><Wordmark/></div><div className="auth-mid"><form className="auth-card" onSubmit={submit}>
     <h2>Welcome back</h2><p className="sub">Log in with your WhatsApp number to continue.</p>
-    <div className="field" style={{marginTop:28}}><label htmlFor="login-email">Email</label><input id="login-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" required /></div><div className="field"><label htmlFor="login-password">Password</label><input id="login-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} required /></div><div className="field"><label htmlFor="login-number">WhatsApp number</label><input id="login-number" type="tel" value={number} onChange={e=>setNumber(e.target.value)} placeholder="+234 800 000 0000" required /></div>
+    <div className="field" style={{marginTop:28}}><label htmlFor="login-email">Email</label><input id="login-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" required /></div><div className="field"><label htmlFor="login-password">Password</label><input id="login-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} required /></div><div className="field"><label htmlFor="login-number">WhatsApp number</label><input id="login-number" type="tel" value={number} onChange={e=>setNumber(e.target.value)} placeholder="+234 800 000 0000" /></div>
     {error&&<p className="verification-status error">{error}</p>}
-    <button className="submit-btn" type="submit">Log in</button><div className="auth-switch">New to Boopa? <button type="button" onClick={()=>onBack()}>Create a profile</button></div>
+    <button className="submit-btn" type="submit" disabled={saving}>{saving?"Signing you in…":"Log in"}</button><div className="auth-switch">New to Boopa? <button type="button" onClick={()=>onBack()}>Create a profile</button></div>
   </form></div></div>;
 }
 
