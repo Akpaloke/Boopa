@@ -21,7 +21,7 @@ export async function authenticatedUser(req: Request) {
 }
 
 export function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" } });
 }
 
 export async function paystack(path: string, init: RequestInit = {}) {

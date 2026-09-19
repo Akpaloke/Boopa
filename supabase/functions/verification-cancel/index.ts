@@ -1,6 +1,7 @@
 import { admin, authenticatedUser, json, paystack } from "../_shared/paystack.ts";
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" } });
   try {
     const user = await authenticatedUser(req);
     const { data: subscription } = await admin.from("verification_subscriptions").select("paystack_subscription_code,paystack_email_token").eq("user_id", user.id).eq("status", "active").maybeSingle();
