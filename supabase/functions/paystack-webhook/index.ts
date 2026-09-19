@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
     event.event === "invoice.payment_failed" ? "failed" :
     ["subscription.disable", "subscription.not_renewed"].includes(event.event) ? "cancelled" : null;
   if (status && !isCommunityVerification) {
-    await admin.from("verification_subscriptions").update({ status, paystack_customer_code: data.customer?.customer_code, paystack_subscription_code: data.subscription?.subscription_code || data.subscription_code, paystack_email_token: data.subscription?.email_token || data.email_token, paystack_plan_code: planCode || PLAN_CODE, next_payment_date: data.next_payment_date, updated_at: new Date().toISOString() }).eq("user_id", user.id);
+    await admin.from("verification_subscriptions").update({ status, paystack_reference: data.reference || data.transaction_reference, paystack_customer_code: data.customer?.customer_code, paystack_subscription_code: data.subscription?.subscription_code || data.subscription_code, paystack_email_token: data.subscription?.email_token || data.email_token, paystack_plan_code: planCode || PLAN_CODE, next_payment_date: data.next_payment_date, updated_at: new Date().toISOString() }).eq("user_id", user.id);
     await admin.from("profiles").update({ is_verified: status === "active", verification_status: status || "inactive" }).eq("id", user.id);
   }
   return new Response("ok");

@@ -43,15 +43,17 @@ export function options() {
 }
 
 export async function paystack(path: string, init: RequestInit = {}) {
+  const secret = Deno.env.get("PAYSTACK_SECRET_KEY");
+  if (!secret) throw new Error("PAYSTACK_SECRET_KEY is not configured.");
   const response = await fetch(`https://api.paystack.co${path}`, {
     ...init,
     headers: {
-      Authorization: ["Bearer", Deno.env.get("PAYSTACK_SECRET_KEY") || ""].join(" "),
+      Authorization: `Bearer ${secret}`,
       "Content-Type": "application/json",
       ...(init.headers || {}),
     },
   });
-  const body = await response.json();
+  const body = await response.json().catch(() => ({}));
   if (!response.ok || !body.status) throw new Error(body.message || "Paystack request failed");
   return body.data;
 }

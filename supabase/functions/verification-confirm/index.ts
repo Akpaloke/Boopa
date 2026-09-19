@@ -12,6 +12,7 @@ Deno.serve(async (req) => {
     const subscription = transaction.subscription || {};
     const { data: subscriptionRow, error } = await admin.from("verification_subscriptions").update({
       status: "active",
+      paystack_reference: reference,
       paystack_customer_code: transaction.customer?.customer_code,
       paystack_subscription_code: subscription.subscription_code,
       paystack_email_token: subscription.email_token,
