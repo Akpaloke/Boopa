@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
       && data.reference
       && Number(data.amount) === 20000
       && data.currency === "NGN"
-      && plan === "PLN_qqy4dlftp0esmsr"
+      && plan === "PLN_wr6p28z1zstqalb"
       && metadata.verification_type === "profile"
       && metadata.user_id
     ) {

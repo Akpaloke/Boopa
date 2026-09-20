@@ -37,7 +37,7 @@ SUPABASE_URL=https://uhjezsadlbtrapiyzqrt.supabase.co
 SUPABASE_PUBLISHABLE_KEY=<existing publishable key>
 SUPABASE_SERVICE_ROLE_KEY=<server-only Supabase service role key>
 PAYSTACK_SECRET_KEY=<server-only Paystack secret key>
-PAYSTACK_PLAN_CODE=PLN_qqy4dlftp0esmsr
+PAYSTACK_PLAN_CODE=PLN_wr6p28z1zstqalb
 ```
 
 `SUPABASE_PUBLISHABLE_KEY` must be configured in the Vercel Production

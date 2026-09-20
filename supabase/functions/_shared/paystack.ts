@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-export const PLAN_CODE = "PLN_qqy4dlftp0esmsr";
+export const PLAN_CODE = "PLN_wr6p28z1zstqalb";
 export const AMOUNT = 20000;
 export const CURRENCY = "NGN";
 export const CORS_HEADERS = {

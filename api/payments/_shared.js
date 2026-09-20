@@ -1,7 +1,7 @@
 const crypto = require("node:crypto");
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://uhjezsadlbtrapiyzqrt.supabase.co";
-const PLAN_CODE = "PLN_qqy4dlftp0esmsr";
+const PLAN_CODE = "PLN_wr6p28z1zstqalb";
 const AMOUNT = 20000;
 const CURRENCY = "NGN";
 

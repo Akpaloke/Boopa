@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const AMOUNT = 20000;
 const CURRENCY = "NGN";
-const PLAN_CODE = "PLN_qqy4dlftp0esmsr";
+const PLAN_CODE = "PLN_wr6p28z1zstqalb";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",

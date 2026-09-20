@@ -31,7 +31,7 @@ Apply every migration in `supabase/migrations`, including `202609181430_profiles
 Set these server-side secrets only. `PAYSTACK_PLAN_CODE` is required by the Edge Functions as well:
 
 ```sh
-supabase secrets set PAYSTACK_SECRET_KEY=... SUPABASE_SERVICE_ROLE_KEY=... PAYSTACK_PLAN_CODE=PLN_qqy4dlftp0esmsr
+supabase secrets set PAYSTACK_SECRET_KEY=... SUPABASE_SERVICE_ROLE_KEY=... PAYSTACK_PLAN_CODE=PLN_wr6p28z1zstqalb
 ```
 
 Configure the Paystack webhook URL as:
