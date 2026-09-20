@@ -15,4 +15,4 @@ window.BOOPA_CONFIG = {
 
 The local variable names and deployment placeholders are documented in `.env.example`. Never place `PAYSTACK_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` in `config.js`, HTML, frontend environment variables, or browser code.
 
-Apply all migrations in `supabase/migrations`, including `202609200935_avatar_storage.sql`. This ensures the public `avatars` bucket exists and restricts authenticated uploads, updates, and deletes to paths beginning with the current user's id.
+Apply all migrations in `supabase/migrations`, including `202609200935_avatar_storage.sql` and `202609201132_friend_avatar_policies.sql`. These ensure the public `avatars` bucket exists, restrict avatar operations to the owner's user-id path, and limit friend-request updates to the receiving user.
