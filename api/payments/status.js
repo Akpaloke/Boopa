@@ -5,7 +5,7 @@ module.exports = async (req, res) => {
   try {
     logPaystackEnvironment("status");
     const user = await supabaseUser(req);
-    if (!user) return json(res, 401, { error: "Unauthorized" });
+    if (!user) return json(res, 401, { error: "Supabase authentication failed. Please log in again." });
     console.log("SUPABASE_AUTH_VERIFIED");
     const token = getBearerToken(req);
     const profiles = await supabaseRestAsUser(`profiles?select=is_verified,verification_status&id=eq.${encodeURIComponent(user.id)}&limit=1`, token);
