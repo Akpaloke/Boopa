@@ -31,6 +31,18 @@ create table if not exists public.notifications (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid not null references public.profiles(id) on delete cascade,
+  receiver_id uuid not null references public.profiles(id) on delete cascade,
+  content text not null,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now(),
+  constraint messages_not_self check (sender_id <> receiver_id),
+  constraint messages_content_not_empty check (length(btrim(content)) > 0)
+);
+alter table public.messages enable row level security;
+
 create table if not exists public.communities (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles(id) on delete cascade,
@@ -162,6 +174,47 @@ create policy "Users update their own profile"
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
+drop view if exists public.public_profiles;
+create view public.public_profiles as
+select id, full_name, university, department, level, avatar_url, bio,
+       is_verified, verification_status, created_at, updated_at
+from public.profiles;
+grant select on public.public_profiles to authenticated;
+revoke select (number) on public.profiles from anon, authenticated;
+
+create or replace function public.get_profile_for_view(target_user_id uuid)
+returns table (
+  id uuid, full_name text, email text, university text, department text,
+  level text, avatar_url text, bio text, is_verified boolean,
+  verification_status text, number text, created_at timestamptz, updated_at timestamptz
+)
+language sql security definer set search_path = public
+as $$
+  select p.id, p.full_name,
+    case when p.id = auth.uid() then p.email else null end,
+    p.university, p.department, p.level, p.avatar_url, p.bio,
+    p.is_verified, p.verification_status,
+    case when p.id = auth.uid() or exists (
+      select 1 from public.friend_requests fr
+      where fr.status = 'accepted'
+        and ((fr.sender_id = auth.uid() and fr.receiver_id = p.id)
+          or (fr.receiver_id = auth.uid() and fr.sender_id = p.id))
+    ) then p.number else null end,
+    p.created_at, p.updated_at
+  from public.profiles p
+  where p.id = target_user_id;
+$$;
+revoke all on function public.get_profile_for_view(uuid) from public;
+grant execute on function public.get_profile_for_view(uuid) to authenticated;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.notifications;
+exception when duplicate_object then null;
+end
+$$;
+alter table public.notifications replica identity full;
+
 -- Prevent browser clients from changing verification fields.
 create or replace function public.prevent_client_verification_changes()
 returns trigger
@@ -198,6 +251,31 @@ drop policy if exists "Receivers accept or decline requests" on public.friend_re
 drop policy if exists "Users update their own friend requests" on public.friend_requests;
 create policy "Receivers accept or decline requests"
   on public.friend_requests for update
+  using (auth.uid() = receiver_id)
+  with check (auth.uid() = receiver_id);
+
+drop policy if exists "Users read their messages" on public.messages;
+create policy "Users read their messages"
+  on public.messages for select
+  using (auth.uid() = sender_id or auth.uid() = receiver_id);
+
+drop policy if exists "Connected users send messages" on public.messages;
+create policy "Connected users send messages"
+  on public.messages for insert
+  with check (
+    auth.uid() = sender_id
+    and sender_id <> receiver_id
+    and exists (
+      select 1 from public.friend_requests fr
+      where fr.status = 'accepted'
+        and ((fr.sender_id = sender_id and fr.receiver_id = receiver_id)
+          or (fr.sender_id = receiver_id and fr.receiver_id = sender_id))
+    )
+  );
+
+drop policy if exists "Recipients mark messages read" on public.messages;
+create policy "Recipients mark messages read"
+  on public.messages for update
   using (auth.uid() = receiver_id)
   with check (auth.uid() = receiver_id);
 
@@ -297,6 +375,38 @@ drop trigger if exists friend_request_status_notification on public.friend_reque
 create trigger friend_request_status_notification
 after update of status on public.friend_requests
 for each row execute function public.sync_friend_request_status();
+
+create or replace function public.notify_new_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.notifications(user_id, actor_id, type, message)
+  values (
+    new.receiver_id,
+    new.sender_id,
+    'message',
+    coalesce((select full_name from public.profiles where id = new.sender_id), 'Someone')
+      || ' sent you a new message.'
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists message_notification on public.messages;
+create trigger message_notification
+after insert on public.messages
+for each row execute function public.notify_new_message();
+
+do $$
+begin
+  alter publication supabase_realtime add table public.messages;
+exception when duplicate_object then null;
+end
+$$;
+alter table public.messages replica identity full;
 
 notify pgrst, 'reload schema';
 commit;
