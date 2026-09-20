@@ -37,6 +37,23 @@ create policy "Recipients mark messages read" on public.messages for update
   using (auth.uid() = receiver_id)
   with check (auth.uid() = receiver_id);
 
+create or replace function public.protect_message_fields()
+returns trigger language plpgsql security invoker
+as $$
+begin
+  if new.sender_id is distinct from old.sender_id
+     or new.receiver_id is distinct from old.receiver_id
+     or new.content is distinct from old.content
+     or new.created_at is distinct from old.created_at then
+    raise exception 'Message content cannot be changed.';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists protect_message_fields on public.messages;
+create trigger protect_message_fields before update on public.messages
+for each row execute function public.protect_message_fields();
+
 create or replace function public.notify_new_message()
 returns trigger language plpgsql security definer set search_path = public
 as $$

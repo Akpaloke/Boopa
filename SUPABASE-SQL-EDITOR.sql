@@ -154,6 +154,20 @@ create unique index if not exists verification_one_active_per_user
 alter table public.profiles enable row level security;
 alter table public.friend_requests enable row level security;
 alter table public.notifications enable row level security;
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  endpoint text not null,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, endpoint)
+);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists "Users manage their push subscriptions" on public.push_subscriptions;
+create policy "Users manage their push subscriptions" on public.push_subscriptions for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
 alter table public.communities enable row level security;
 alter table public.verification_subscriptions enable row level security;
 
@@ -279,6 +293,23 @@ create policy "Recipients mark messages read"
   using (auth.uid() = receiver_id)
   with check (auth.uid() = receiver_id);
 
+create or replace function public.protect_message_fields()
+returns trigger language plpgsql security invoker
+as $$
+begin
+  if new.sender_id is distinct from old.sender_id
+     or new.receiver_id is distinct from old.receiver_id
+     or new.content is distinct from old.content
+     or new.created_at is distinct from old.created_at then
+    raise exception 'Message content cannot be changed.';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists protect_message_fields on public.messages;
+create trigger protect_message_fields before update on public.messages
+for each row execute function public.protect_message_fields();
+
 -- Notification policies.
 drop policy if exists "Users read their notifications" on public.notifications;
 create policy "Users read their notifications"
@@ -345,7 +376,8 @@ as $$
 begin
   insert into public.notifications(user_id, actor_id, type, message)
   values (new.receiver_id, new.sender_id, 'friend_request',
-          'Someone sent you a friend request.');
+          coalesce((select full_name from public.profiles where id = new.sender_id), 'Someone')
+          || ' sent you a friend request.');
   return new;
 end;
 $$;
@@ -365,7 +397,8 @@ begin
   if new.status = 'accepted' and old.status is distinct from new.status then
     insert into public.notifications(user_id, actor_id, type, message)
     values (new.sender_id, new.receiver_id, 'friend_request_accepted',
-            'Your friend request was accepted.');
+            coalesce((select full_name from public.profiles where id = new.receiver_id), 'Someone')
+            || ' accepted your friend request.');
   end if;
   return new;
 end;

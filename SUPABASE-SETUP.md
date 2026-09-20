@@ -17,6 +17,24 @@ The local variable names and deployment placeholders are documented in `.env.exa
 
 Apply all migrations in `supabase/migrations`, including `202609200935_avatar_storage.sql` and `202609201132_friend_avatar_policies.sql`. These ensure the public `avatars` bucket exists, restrict avatar operations to the owner's user-id path, and limit friend-request updates to the receiving user.
 
+## Web Push notifications
+
+The browser registers `/sw.js` only when `pushVapidPublicKey` is configured.
+Set the VAPID public key in `config.js` (it is safe to expose); keep the
+private key only in Supabase Edge Function secrets:
+
+```text
+PUSH_VAPID_SUBJECT=mailto:admin@boopa.app
+PUSH_VAPID_PUBLIC_KEY=<same public key as config.js>
+PUSH_VAPID_PRIVATE_KEY=<server-only private key>
+PUSH_WEBHOOK_SECRET=<server-only random value>
+```
+
+Deploy `supabase/functions/push-notification`, then create a Supabase Database
+Webhook for `public.notifications` INSERT events pointing to that function with
+the `x-push-webhook-secret` header. The `202609201800_push_notifications.sql`
+migration creates the private subscription table and RLS policies.
+
 ## Paystack backend
 
 Verification payments are handled by the Vercel Node.js API routes, not by a
