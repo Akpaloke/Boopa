@@ -40,6 +40,12 @@ PAYSTACK_SECRET_KEY=<server-only Paystack secret key>
 PAYSTACK_PLAN_CODE=PLN_qqy4dlftp0esmsr
 ```
 
+`SUPABASE_PUBLISHABLE_KEY` must be configured in the Vercel Production
+environment with the same public key used by `config.js`. The production
+backend reads the exact names `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `PAYSTACK_SECRET_KEY`, and `PAYSTACK_PLAN_CODE`.
+After changing any Vercel variable, create a new production deployment.
+
 Configure Paystack's webhook URL as:
 
 ```text

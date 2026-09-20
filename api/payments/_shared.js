@@ -14,12 +14,8 @@ function getBearerToken(req) {
   return header.replace(/^Bearer\s+/i, "").trim();
 }
 
-function supabaseUserHeaders(token) {
-  return {
-    apikey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "",
-    Authorization: "Bearer " + token,
-    "Content-Type": "application/json",
-  };
+function supabasePublicKey() {
+  return process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "";
 }
 
 function paystackEnvironmentLabel(secret) {
@@ -41,7 +37,7 @@ async function supabaseUser(req) {
   if (!token) return null;
   const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: {
-      apikey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "",
+      apikey: supabasePublicKey(),
       Authorization: "Bearer " + token,
     },
   });
@@ -59,43 +55,48 @@ function supabaseHeaders() {
   };
 }
 
+function supabaseUserHeaders(token) {
+  return {
+    apikey: supabasePublicKey(),
+    Authorization: "Bearer " + token,
+    "Content-Type": "application/json",
+  };
+}
+
+async function readJsonResponse(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
+function responseError(body, fallback, status) {
+  const error = new Error(body.message || body.error || fallback);
+  error.status = status;
+  return error;
+}
+
 async function supabaseRest(path, init = {}) {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...init,
     headers: { ...supabaseHeaders(), ...(init.headers || {}) },
   });
-  const text = await response.text();
-  let body = {};
-  try {
-    body = text ? JSON.parse(text) : {};
-  } catch {
-    body = { message: text };
-  }
+  const body = await readJsonResponse(response);
+  if (!response.ok) throw responseError(body, "Supabase request failed.", response.status);
+  return body;
+}
 
-  async function supabaseRestAsUser(path, token, init = {}) {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      ...init,
-      headers: { ...supabaseUserHeaders(token), ...(init.headers || {}) },
-    });
-    const text = await response.text();
-    let body = {};
-    try {
-      body = text ? JSON.parse(text) : {};
-    } catch {
-      body = { message: text };
-    }
-    if (!response.ok) {
-      const error = new Error(body.message || body.error || "Supabase request failed.");
-      error.status = response.status;
-      throw error;
-    }
-    return body;
-  }
-  if (!response.ok) {
-    const error = new Error(body.message || body.error || "Supabase request failed.");
-    error.status = response.status;
-    throw error;
-  }
+async function supabaseRestAsUser(path, token, init = {}) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: { ...supabaseUserHeaders(token), ...(init.headers || {}) },
+  });
+  const body = await readJsonResponse(response);
+  console.log("SUPABASE_DATABASE_RESPONSE_STATUS", response.status);
+  if (!response.ok) throw responseError(body, "Supabase request failed.", response.status);
   return body;
 }
 
@@ -110,12 +111,10 @@ async function paystack(path, init = {}) {
       ...(init.headers || {}),
     },
   });
-  const body = await response.json().catch(() => ({}));
+  const body = await readJsonResponse(response);
   console.log("PAYSTACK_RESPONSE_STATUS", response.status);
   if (!response.ok || !body.status) {
-    const error = new Error(body.message || "Paystack request failed.");
-    error.status = 502;
-    throw error;
+    throw responseError(body, "Paystack request failed.", 502);
   }
   return body.data;
 }
