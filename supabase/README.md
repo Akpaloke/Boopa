@@ -4,6 +4,7 @@ Deploy the functions with the Supabase CLI:
 
 ```sh
 supabase functions deploy verification-initialize
+supabase functions deploy initialize-verification-payment
 supabase functions deploy verification-confirm
 supabase functions deploy verification-status
 supabase functions deploy verification-cancel
