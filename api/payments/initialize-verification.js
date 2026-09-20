@@ -1,10 +1,11 @@
 const {
   AMOUNT, CURRENCY, PLAN_CODE, json, supabaseUser, supabaseRest,
-  paystack, requirePaymentConfig, safeError,
+  paystack, requirePaymentConfig, safeError, logPaystackEnvironment,
 } = require("./_shared");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return json(res, 405, { error: "Method not allowed." });
+  logPaystackEnvironment("initialize-verification");
   console.log("PAYSTACK_INITIALIZATION_STARTED");
   try {
     requirePaymentConfig();

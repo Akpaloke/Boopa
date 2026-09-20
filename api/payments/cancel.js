@@ -1,8 +1,9 @@
-const { json, supabaseUser, supabaseRest, paystack, requirePaymentConfig, safeError } = require("./_shared");
+const { json, supabaseUser, supabaseRest, paystack, requirePaymentConfig, safeError, logPaystackEnvironment } = require("./_shared");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return json(res, 405, { error: "Method not allowed." });
   try {
+    logPaystackEnvironment("cancel");
     requirePaymentConfig();
     const user = await supabaseUser(req);
     if (!user) return json(res, 401, { error: "Unauthorized" });

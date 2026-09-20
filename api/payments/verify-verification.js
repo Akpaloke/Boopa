@@ -1,11 +1,12 @@
 const {
   AMOUNT, CURRENCY, PLAN_CODE, json, supabaseUser, supabaseRest,
-  paystack, requirePaymentConfig, safeError,
+  paystack, requirePaymentConfig, safeError, logPaystackEnvironment,
 } = require("./_shared");
 
 module.exports = async (req, res) => {
   if (req.method !== "GET") return json(res, 405, { error: "Method not allowed." });
   try {
+    logPaystackEnvironment("verify-verification");
     requirePaymentConfig();
     const user = await supabaseUser(req);
     if (!user) return json(res, 401, { error: "Please log in again to verify your payment." });

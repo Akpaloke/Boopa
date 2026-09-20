@@ -14,13 +14,35 @@ function getBearerToken(req) {
   return header.replace(/^Bearer\s+/i, "").trim();
 }
 
+function supabaseUserHeaders(token) {
+  return {
+    apikey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "",
+    Authorization: "Bearer " + token,
+    "Content-Type": "application/json",
+  };
+}
+
+function paystackEnvironmentLabel(secret) {
+  if (!secret) return "missing";
+  if (secret.startsWith("sk_live_")) return "live";
+  if (secret.startsWith("sk_test_")) return "test";
+  return "unexpected";
+}
+
+function logPaystackEnvironment(route) {
+  const secret = process.env.PAYSTACK_SECRET_KEY;
+  console.log("PAYSTACK_ROUTE_REACHED", route);
+  console.log("PAYSTACK_SECRET_ENV_EXISTS", Boolean(secret));
+  console.log("PAYSTACK_SECRET_PREFIX", paystackEnvironmentLabel(secret));
+}
+
 async function supabaseUser(req) {
   const token = getBearerToken(req);
   if (!token) return null;
   const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: {
       apikey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "",
-      Authorization: `Bearer ${token}`,
+      Authorization: "Bearer " + token,
     },
   });
   if (!response.ok) return null;
@@ -32,7 +54,7 @@ function supabaseHeaders() {
   if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured.");
   return {
     apikey: key,
-    Authorization: `Bearer ${key}`,
+    Authorization: "Bearer " + key,
     "Content-Type": "application/json",
   };
 }
@@ -49,6 +71,26 @@ async function supabaseRest(path, init = {}) {
   } catch {
     body = { message: text };
   }
+
+  async function supabaseRestAsUser(path, token, init = {}) {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      ...init,
+      headers: { ...supabaseUserHeaders(token), ...(init.headers || {}) },
+    });
+    const text = await response.text();
+    let body = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = { message: text };
+    }
+    if (!response.ok) {
+      const error = new Error(body.message || body.error || "Supabase request failed.");
+      error.status = response.status;
+      throw error;
+    }
+    return body;
+  }
   if (!response.ok) {
     const error = new Error(body.message || body.error || "Supabase request failed.");
     error.status = response.status;
@@ -63,12 +105,13 @@ async function paystack(path, init = {}) {
   const response = await fetch(`https://api.paystack.co${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${secret}`,
+      Authorization: "Bearer " + secret,
       "Content-Type": "application/json",
       ...(init.headers || {}),
     },
   });
   const body = await response.json().catch(() => ({}));
+  console.log("PAYSTACK_RESPONSE_STATUS", response.status);
   if (!response.ok || !body.status) {
     const error = new Error(body.message || "Paystack request failed.");
     error.status = 502;
@@ -96,8 +139,11 @@ module.exports = {
   json,
   supabaseUser,
   supabaseRest,
+  supabaseRestAsUser,
+  getBearerToken,
   paystack,
   requirePaymentConfig,
+  logPaystackEnvironment,
   safeError,
   crypto,
 };

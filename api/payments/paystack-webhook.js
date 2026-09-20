@@ -1,4 +1,4 @@
-const { crypto, json, supabaseRest, requirePaymentConfig, safeError } = require("./_shared");
+const { crypto, json, supabaseRest, requirePaymentConfig, safeError, logPaystackEnvironment } = require("./_shared");
 
 function rawBody(req) {
   return new Promise((resolve, reject) => {
@@ -12,6 +12,7 @@ function rawBody(req) {
 module.exports = async (req, res) => {
   if (req.method !== "POST") return json(res, 405, { error: "Method not allowed." });
   try {
+    logPaystackEnvironment("paystack-webhook");
     requirePaymentConfig();
     const signature = req.headers["x-paystack-signature"];
     const raw = await rawBody(req);
