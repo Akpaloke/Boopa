@@ -103,6 +103,8 @@ create table if not exists public.verification_subscriptions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   paystack_reference text,
+  paystack_authorization_url text,
+  paystack_access_code text,
   paystack_customer_code text,
   paystack_subscription_code text unique,
   paystack_email_token text,
@@ -121,13 +123,20 @@ create table if not exists public.verification_subscriptions (
 alter table public.verification_subscriptions
   add column if not exists paystack_reference text;
 
-create unique index if not exists verification_one_current_subscription
-  on public.verification_subscriptions(user_id)
-  where status in ('pending', 'active');
+drop index if exists public.verification_one_current_subscription;
 
 create unique index if not exists verification_paystack_reference_idx
   on public.verification_subscriptions(paystack_reference)
   where paystack_reference is not null;
+
+create unique index if not exists verification_one_active_per_user
+  on public.verification_subscriptions(user_id)
+  where status = 'active';
+
+-- Preserve subscription history while clearing abandoned checkout attempts.
+-- update public.verification_subscriptions
+-- set status = 'cancelled', cancelled_at = now()
+-- where status = 'pending';
 
 -- Keep RLS enabled.
 alter table public.profiles enable row level security;

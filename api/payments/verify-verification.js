@@ -31,12 +31,16 @@ module.exports = async (req, res) => {
     );
     if (!subscriptions.length) return json(res, 400, { error: "No pending verification payment was found." });
 
+    const startedAt = new Date();
+    const nextPaymentDate = new Date(startedAt);
+    nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
     await supabaseRest(`verification_subscriptions?id=eq.${encodeURIComponent(subscriptions[0].id)}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
         status: "active",
-        started_at: new Date().toISOString(),
+        started_at: startedAt.toISOString(),
+        next_payment_date: nextPaymentDate.toISOString(),
         paystack_customer_code: transaction.customer?.customer_code || null,
       }),
     });

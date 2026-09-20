@@ -66,13 +66,16 @@ Deno.serve(async (request) => {
     );
     const { data: existing, error: existingError } = await admin
       .from("verification_subscriptions")
-      .select("id")
+      .select("id,status,next_payment_date")
       .eq("user_id", user.id)
       .in("status", ["pending", "active"])
       .maybeSingle();
     if (existingError) throw existingError;
-    if (existing) {
-      return json({ error: "An active or pending subscription already exists." }, 409);
+    if (existing
+      && existing.status === "active"
+      && existing.next_payment_date
+      && new Date(existing.next_payment_date).getTime() > Date.now()) {
+      return json({ error: "An active subscription already exists." }, 409);
     }
 
     console.log("PAYSTACK_REQUEST_STARTED");

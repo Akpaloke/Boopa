@@ -36,11 +36,15 @@ module.exports = async (req, res) => {
       && metadata.user_id
     ) {
       const reference = data.reference;
-      const rows = await supabaseRest(`verification_subscriptions?select=id,user_id,status&paystack_reference=eq.${encodeURIComponent(reference)}&status=eq.pending&limit=1`);
+      const rows = await supabaseRest(`verification_subscriptions?select=id,user_id,status&paystack_reference=eq.${encodeURIComponent(reference)}&limit=1`);
       if (rows.length && rows[0].user_id === metadata.user_id) {
+        if (rows[0].status === "active") return json(res, 200, { received: true, duplicate: true });
+        const startedAt = new Date();
+        const nextPaymentDate = new Date(startedAt);
+        nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
         await supabaseRest(`verification_subscriptions?id=eq.${encodeURIComponent(rows[0].id)}`, {
           method: "PATCH", headers: { Prefer: "return=minimal" },
-          body: JSON.stringify({ status: "active", started_at: new Date().toISOString() }),
+          body: JSON.stringify({ status: "active", started_at: startedAt.toISOString(), next_payment_date: nextPaymentDate.toISOString() }),
         });
         await supabaseRest(`profiles?id=eq.${encodeURIComponent(rows[0].user_id)}`, {
           method: "PATCH", headers: { Prefer: "return=minimal" },

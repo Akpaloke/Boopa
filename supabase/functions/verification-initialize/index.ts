@@ -5,8 +5,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return options();
   try {
     const user = await authenticatedUser(req);
-    const { data: existing } = await admin.from("verification_subscriptions").select("id").eq("user_id", user.id).in("status", ["pending", "active"]).maybeSingle();
-    if (existing) return json({ error: "An active or pending subscription already exists." }, 409);
+    const { data: existing } = await admin.from("verification_subscriptions").select("id,status,next_payment_date").eq("user_id", user.id).eq("status", "active");
+    if (existing?.some((subscription) => subscription.next_payment_date && new Date(subscription.next_payment_date).getTime() > Date.now())) {
+      return json({ error: "An active subscription already exists." }, 409);
+    }
     if (!user.email) return json({ error: "Your account does not have an email address for payment." }, 400);
     const data = await paystack("/transaction/initialize", { method: "POST", body: JSON.stringify({ email: user.email, amount: AMOUNT, currency: CURRENCY, plan: PLAN_CODE, metadata: { user_id: user.id, verification_type: "profile" } }) });
     if (!data?.authorization_url || !data?.access_code || !data?.reference) return json({ error: "Paystack did not return a valid checkout response." }, 502);

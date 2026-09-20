@@ -7,7 +7,9 @@ module.exports = async (req, res) => {
     requirePaymentConfig();
     const user = await supabaseUser(req);
     if (!user) return json(res, 401, { error: "Unauthorized" });
-    const rows = await supabaseRest(`verification_subscriptions?select=id,status,paystack_subscription_code,paystack_email_token&user_id=eq.${encodeURIComponent(user.id)}&status=in.(active,pending)&order=created_at.desc`);
+    const requestedReference = typeof req.body?.reference === "string" ? req.body.reference.trim() : "";
+    const referenceFilter = requestedReference ? `&paystack_reference=eq.${encodeURIComponent(requestedReference)}` : "";
+    const rows = await supabaseRest(`verification_subscriptions?select=id,status,paystack_subscription_code,paystack_email_token&user_id=eq.${encodeURIComponent(user.id)}&status=in.(active,pending)&order=created_at.desc${referenceFilter}`);
     if (!rows.length) return json(res, 404, { error: "No active verification subscription was found." });
     const paystackSubscription = rows.find((row) => row.status === "active") || rows[0];
     if (paystackSubscription.paystack_subscription_code && paystackSubscription.paystack_email_token) {
