@@ -13,3 +13,14 @@ drop policy if exists "Users manage their push subscriptions" on public.push_sub
 create policy "Users manage their push subscriptions" on public.push_subscriptions for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create index if not exists push_subscriptions_user_idx on public.push_subscriptions(user_id);
+create or replace function public.set_push_subscription_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+drop trigger if exists push_subscriptions_updated_at on public.push_subscriptions;
+create trigger push_subscriptions_updated_at
+before update on public.push_subscriptions
+for each row execute function public.set_push_subscription_updated_at();

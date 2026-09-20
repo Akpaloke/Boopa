@@ -1,0 +1,11 @@
+{
+  "name": "Boopa",
+  "short_name": "Boopa",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#131316",
+  "background_color": "#FBFBFC",
+  "icons": [
+    { "src": "/boopa-icon.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

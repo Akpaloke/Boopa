@@ -19,21 +19,33 @@ Apply all migrations in `supabase/migrations`, including `202609200935_avatar_st
 
 ## Web Push notifications
 
-The browser registers `/sw.js` only when `pushVapidPublicKey` is configured.
+The browser registers `/service-worker.js` only after the user chooses
+**Enable phone notifications** and `pushVapidPublicKey` is configured.
 Set the VAPID public key in `config.js` (it is safe to expose); keep the
 private key only in Supabase Edge Function secrets:
 
 ```text
-PUSH_VAPID_SUBJECT=mailto:admin@boopa.app
-PUSH_VAPID_PUBLIC_KEY=<same public key as config.js>
-PUSH_VAPID_PRIVATE_KEY=<server-only private key>
+VAPID_SUBJECT=mailto:admin@boopa.app
+VAPID_PUBLIC_KEY=<same public key as config.js>
+VAPID_PRIVATE_KEY=<server-only private key>
 PUSH_WEBHOOK_SECRET=<server-only random value>
+```
+
+Generate a key pair once if you do not already have one:
+
+```sh
+npx web-push generate-vapid-keys
 ```
 
 Deploy `supabase/functions/push-notification`, then create a Supabase Database
 Webhook for `public.notifications` INSERT events pointing to that function with
 the `x-push-webhook-secret` header. The `202609201800_push_notifications.sql`
 migration creates the private subscription table and RLS policies.
+
+```sh
+supabase functions deploy push-notification
+supabase secrets set VAPID_SUBJECT=mailto:admin@boopa.app VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... PUSH_WEBHOOK_SECRET=...
+```
 
 ## Paystack backend
 
