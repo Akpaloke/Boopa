@@ -16,3 +16,32 @@ window.BOOPA_CONFIG = {
 The local variable names and deployment placeholders are documented in `.env.example`. Never place `PAYSTACK_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` in `config.js`, HTML, frontend environment variables, or browser code.
 
 Apply all migrations in `supabase/migrations`, including `202609200935_avatar_storage.sql` and `202609201132_friend_avatar_policies.sql`. These ensure the public `avatars` bucket exists, restrict avatar operations to the owner's user-id path, and limit friend-request updates to the receiving user.
+
+## Paystack backend
+
+Verification payments are handled by the Vercel Node.js API routes, not by a
+Supabase Edge Function:
+
+```text
+POST /api/payments/initialize-verification
+GET  /api/payments/verify-verification?reference=...
+GET  /api/payments/status
+POST /api/payments/cancel
+POST /api/payments/paystack-webhook
+```
+
+Set these as server-only Vercel environment variables:
+
+```text
+SUPABASE_URL=https://uhjezsadlbtrapiyzqrt.supabase.co
+SUPABASE_PUBLISHABLE_KEY=<existing publishable key>
+SUPABASE_SERVICE_ROLE_KEY=<server-only Supabase service role key>
+PAYSTACK_SECRET_KEY=<server-only Paystack secret key>
+PAYSTACK_PLAN_CODE=PLN_qqy4dlftp0esmsr
+```
+
+Configure Paystack's webhook URL as:
+
+```text
+https://boopa-con.vercel.app/api/payments/paystack-webhook
+```
