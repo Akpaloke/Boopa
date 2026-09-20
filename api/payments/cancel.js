@@ -7,22 +7,26 @@ module.exports = async (req, res) => {
     requirePaymentConfig();
     const user = await supabaseUser(req);
     if (!user) return json(res, 401, { error: "Unauthorized" });
-    const rows = await supabaseRest(`verification_subscriptions?select=id,paystack_subscription_code,paystack_email_token&user_id=eq.${encodeURIComponent(user.id)}&status=eq.active&order=created_at.desc&limit=1`);
+    const rows = await supabaseRest(`verification_subscriptions?select=id,status,paystack_subscription_code,paystack_email_token&user_id=eq.${encodeURIComponent(user.id)}&status=in.(active,pending)&order=created_at.desc`);
     if (!rows.length) return json(res, 404, { error: "No active verification subscription was found." });
-    if (rows[0].paystack_subscription_code && rows[0].paystack_email_token) {
+    const paystackSubscription = rows.find((row) => row.status === "active") || rows[0];
+    if (paystackSubscription.paystack_subscription_code && paystackSubscription.paystack_email_token) {
       await paystack("/subscription/disable", {
         method: "POST",
         body: JSON.stringify({
-          code: rows[0].paystack_subscription_code,
-          token: rows[0].paystack_email_token,
+          code: paystackSubscription.paystack_subscription_code,
+          token: paystackSubscription.paystack_email_token,
         }),
       });
     }
-    await supabaseRest(`verification_subscriptions?id=eq.${encodeURIComponent(rows[0].id)}`, {
-      method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ status: "cancelled", cancelled_at: new Date().toISOString() }),
-    });
+    const cancelledAt = new Date().toISOString();
+    for (const row of rows) {
+      await supabaseRest(`verification_subscriptions?id=eq.${encodeURIComponent(row.id)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ status: "cancelled", cancelled_at: cancelledAt }),
+      });
+    }
     await supabaseRest(`profiles?id=eq.${encodeURIComponent(user.id)}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },

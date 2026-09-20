@@ -15,9 +15,13 @@ module.exports = async (req, res) => {
     if (!user.email) return json(res, 400, { error: "Your account does not have an email address for payment." });
 
     const existing = await supabaseRest(
-      `verification_subscriptions?select=id&user_id=eq.${encodeURIComponent(user.id)}&status=in.(pending,active)&limit=1`,
+      `verification_subscriptions?select=id,status,paystack_reference&user_id=eq.${encodeURIComponent(user.id)}&status=in.(pending,active)&order=created_at.desc`,
     );
-    if (existing.length) return json(res, 409, { error: "An active or pending subscription already exists." });
+    const blocking = existing.filter((subscription) => ["pending", "active"].includes(subscription.status));
+    console.log("SUBSCRIPTION_BLOCKING_RECORDS", blocking.length);
+    if (blocking.length) {
+      return json(res, 409, { error: "An active or pending subscription already exists." });
+    }
 
     console.log("PAYSTACK_REQUEST_SENT");
     const checkout = await paystack("/transaction/initialize", {

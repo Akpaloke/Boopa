@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
       && metadata.user_id
     ) {
       const reference = data.reference;
-      const rows = await supabaseRest(`verification_subscriptions?select=id,user_id&paystack_reference=eq.${encodeURIComponent(reference)}&limit=1`);
+      const rows = await supabaseRest(`verification_subscriptions?select=id,user_id,status&paystack_reference=eq.${encodeURIComponent(reference)}&status=eq.pending&limit=1`);
       if (rows.length && rows[0].user_id === metadata.user_id) {
         await supabaseRest(`verification_subscriptions?id=eq.${encodeURIComponent(rows[0].id)}`, {
           method: "PATCH", headers: { Prefer: "return=minimal" },
