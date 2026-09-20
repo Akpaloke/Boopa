@@ -124,6 +124,7 @@
   .app{min-height:100vh;display:flex;flex-direction:column;}
   .app-top{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--border);padding:16px 6vw;display:flex;align-items:center;gap:14px;}
   .app-content{flex:1;max-width:920px;margin:0 auto;width:100%;padding:24px 6vw calc(100px + env(safe-area-inset-bottom));}
+  .app-content.chat-mode{height:calc(100dvh - 73px);min-height:0;padding-top:12px;padding-bottom:calc(76px + env(safe-area-inset-bottom));overflow:hidden;}
   .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--border);display:flex;padding:8px 6px calc(8px + env(safe-area-inset-bottom));z-index:10;}
   .bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;color:var(--text-muted);font-size:11px;font-weight:600;padding:7px 6px;border-radius:10px;min-height:48px;}
   .bottom-nav button.active{color:var(--primary);}
@@ -193,11 +194,11 @@
   .feed-item .fi-meta{font-size:12px;color:var(--text-muted);margin-top:6px;}
 
   .profile-card{max-width:420px;margin:0 auto;}
-  .chat-shell{max-width:720px;margin:0 auto;min-height:calc(100vh - 150px);display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 12px 36px color-mix(in srgb,var(--text) 7%,transparent);}
+  .chat-shell{max-width:720px;width:100%;height:100%;min-height:0;margin:0 auto;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 12px 36px color-mix(in srgb,var(--text) 7%,transparent);}
   .chat-head{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--surface) 94%,var(--primary-soft));}
   .chat-head .back-btn{flex-shrink:0;}
   .chat-status{font-size:12px;color:var(--success);margin-top:3px;}
-  .chat-body{flex:1;display:flex;flex-direction:column;gap:8px;padding:20px 16px;overflow-y:auto;min-height:300px;}
+  .chat-body{flex:1;display:flex;flex-direction:column;gap:8px;padding:20px 16px;overflow-y:auto;min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
   .chat-empty{margin:auto;text-align:center;color:var(--text-muted);padding:24px;}
   .chat-empty .avatar{margin:0 auto 12px;}
   .chat-bubble-row{display:flex;width:100%;}
@@ -208,7 +209,14 @@
   .chat-composer{display:flex;gap:8px;padding:12px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--surface);}
   .chat-composer input{flex:1;min-width:0;border:1px solid var(--border);border-radius:22px;padding:12px 15px;background:var(--bg);color:var(--text);}
   .chat-composer .submit-btn{width:auto;margin:0;border-radius:22px;padding:11px 18px;}
-  @media(max-width:640px){.chat-shell{min-height:calc(100vh - 116px);border-left:0;border-right:0;border-radius:0;box-shadow:none;margin:0 -14px;}.chat-body{padding:16px 12px;}.chat-bubble{max-width:84%;}}
+  .push-setting{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-top:1px solid var(--border);margin-top:18px;}
+  .push-setting p{font-size:12px;color:var(--text-muted);line-height:1.45;margin-top:4px;}
+  .push-toggle{width:52px;height:30px;border:0;border-radius:20px;background:var(--border);padding:3px;flex-shrink:0;}
+  .push-toggle span{display:block;width:24px;height:24px;border-radius:50%;background:var(--text-muted);transition:transform .2s ease,background .2s ease;}
+  .push-toggle.on{background:var(--success);}
+  .push-toggle.on span{transform:translateX(22px);background:#fff;}
+  .push-toggle:disabled{opacity:.45;cursor:not-allowed;}
+  @media(max-width:640px){.app-content.chat-mode{height:calc(100dvh - 67px);padding:8px 0 calc(70px + env(safe-area-inset-bottom));}.chat-shell{border-left:0;border-right:0;border-radius:0;box-shadow:none;}.chat-body{padding:16px 12px;}.chat-bubble{max-width:84%;}}
   .profile-pfp{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 0 22px;}
   .profile-pfp h2{font-size:22px;margin-top:14px;}
   .profile-pfp .department{font-size:14.5px;font-weight:500;margin-top:4px;}
@@ -279,25 +287,60 @@ const supabaseClient = (() => {
 })();
 const PROFILE_TABLE = "profiles";
 const getSession = async () => supabaseClient ? (await supabaseClient.auth.getSession()).data.session : null;
-const registerPushSubscription = async userId => {
-  const publicKey = BOOPA_CONFIG.pushVapidPublicKey;
-  if(!publicKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return {ok:false,error:"Push notifications aren't supported on this device/browser."};
+const pushDiagnostics = () => {
+  const checks={secure:window.isSecureContext||location.hostname==="localhost",notification:"Notification" in window,serviceWorker:"serviceWorker" in navigator,push:"PushManager" in window,configured:!!BOOPA_CONFIG.pushVapidPublicKey};
+  Object.entries(checks).forEach(([name,ok])=>console.debug(`[Boopa Push] ${name}: ${ok?"supported":"unavailable"}`));
+  if(!checks.secure||!checks.notification||!checks.serviceWorker||!checks.push) return {status:"UNSUPPORTED",message:"Push notifications aren't supported on this browser."};
+  if(!checks.configured) return {status:"UNSUPPORTED",message:"Push notifications are not configured for this deployment."};
+  if(Notification.permission==="denied") return {status:"BLOCKED",message:"Notifications are blocked in your browser. Enable them in your browser settings."};
+  return {status:Notification.permission==="granted"?"SUPPORTED":"PERMISSION_REQUIRED",message:""};
+};
+const getPushState = async userId => {
+  const base=pushDiagnostics();
+  if(base.status==="UNSUPPORTED"||base.status==="BLOCKED") return {...base,enabled:false};
   try {
-    const registration = await navigator.serviceWorker.register("service-worker.js");
-    if(Notification.permission==="default") await Notification.requestPermission();
-    if(Notification.permission!=="granted") return {ok:false,error:"Notification permission was not granted."};
-    const bytes=Uint8Array.from(atob(publicKey.replace(/-/g,"+").replace(/_/g,"/")),char=>char.charCodeAt(0));
+    const registration=await navigator.serviceWorker.register("/service-worker.js");
+    const subscription=await registration.pushManager.getSubscription();
+    console.debug(`[Boopa Push] Permission: ${Notification.permission}`,`[Boopa Push] Subscription: ${subscription?"active":"inactive"}`);
+    if(!subscription) return {...base,status:Notification.permission==="granted"?"SUPPORTED":"PERMISSION_REQUIRED",enabled:false};
+    const {data,error}=await requireClient().from("push_subscriptions").select("id").eq("user_id",userId).eq("endpoint",subscription.endpoint).maybeSingle();
+    if(error) throw error;
+    return {...base,status:data?"ENABLED":"SUPPORTED",enabled:!!data,subscription};
+  } catch(error) {
+    console.error("[Boopa Push] Subscription check failed:",error);
+    return {status:"SUPPORTED",enabled:false,message:"Notifications are allowed, but this device could not create a push subscription. Please try again."};
+  }
+};
+const setPushEnabled = async (userId,enabled) => {
+  const base=pushDiagnostics();
+  if(!enabled) {
+    const registration=await navigator.serviceWorker.getRegistration("/service-worker.js");
+    const subscription=registration&&await registration.pushManager.getSubscription();
+    if(subscription){await subscription.unsubscribe();await requireClient().from("push_subscriptions").delete().eq("user_id",userId).eq("endpoint",subscription.endpoint);}
+    return {status:"SUPPORTED",enabled:false,message:""};
+  }
+  if(base.status==="BLOCKED"||base.status==="UNSUPPORTED") return {...base,enabled:false};
+  try {
+    if(Notification.permission==="default"){
+      const permission=await Notification.requestPermission();
+      if(permission!=="granted") return {status:permission==="denied"?"BLOCKED":"PERMISSION_REQUIRED",enabled:false,message:permission==="denied"?"Notifications are blocked. Please enable them in your browser settings.":"Notification permission was not granted."};
+    }
+    const registration=await navigator.serviceWorker.register("/service-worker.js");
+    const bytes=Uint8Array.from(atob(BOOPA_CONFIG.pushVapidPublicKey.replace(/-/g,"+").replace(/_/g,"/")+"=="),char=>char.charCodeAt(0));
     const subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
     const json=subscription.toJSON();
     const {error}=await requireClient().from("push_subscriptions").upsert({user_id:userId,endpoint:json.endpoint,p256dh:json.keys?.p256dh,auth:json.keys?.auth,updated_at:new Date().toISOString()},{onConflict:"user_id,endpoint"});
     if(error) throw error;
-    return {ok:true};
-  }catch(error){console.warn("Boopa push notifications unavailable:",error?.message||"unsupported device");return {ok:false,error:"Unable to enable phone notifications right now. Please try again."};}
+    console.debug("[Boopa Push] Subscription: active");
+    return {status:"ENABLED",enabled:true,message:""};
+  } catch(error) {
+    console.error("[Boopa Push] Subscription failed:",error);
+    return {status:"SUPPORTED",enabled:false,message:"Notifications are allowed, but this device could not create a push subscription. Please try again."};
+  }
 };
 const pushSupportMessage = () => {
-  if(!BOOPA_CONFIG.pushVapidPublicKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "Push notifications aren't supported on this device/browser.";
-  if(Notification.permission==="denied") return "Push notifications are blocked. Enable them in your browser settings.";
-  return "";
+  const state=pushDiagnostics();
+  return state.message;
 };
 const requireClient = () => {
   if (!supabaseClient) throw new Error("Supabase is not configured for this deployment.");
@@ -595,12 +638,13 @@ function Verification({profile,isVerified,status,onRefresh,onBack,onCompleted}){
 }
 
 function Profile({profile,onLogout,onSave,isVerified,onOpenVerification}){
-  const [editing,setEditing]=useState(false); const [draft,setDraft]=useState(profile); const [avatarPreview,setAvatarPreview]=useState(profile.avatar_url||""); const [uploading,setUploading]=useState(false); const [avatarError,setAvatarError]=useState(""); const avatarInputRef=useRef(null);
+  const [editing,setEditing]=useState(false); const [draft,setDraft]=useState(profile); const [avatarPreview,setAvatarPreview]=useState(profile.avatar_url||""); const [uploading,setUploading]=useState(false); const [avatarError,setAvatarError]=useState(""); const [pushState,setPushState]=useState({status:"SUPPORTED",enabled:false,message:""}); const [pushBusy,setPushBusy]=useState(false); const avatarInputRef=useRef(null);
+  useEffect(()=>{let active=true;(async()=>{const state=await getPushState(profile.id);if(active)setPushState(state);})();return()=>{active=false;};},[profile.id]);
   const update=key=>e=>setDraft({...draft,[key]:e.target.value});
   const save=async e=>{e.preventDefault();await onSave(draft);setEditing(false);};
   const uploadAvatar=async e=>{const file=e.target.files?.[0];if(!file)return;console.log("AVATAR_UPLOAD_STARTED");setAvatarError("");const validTypes=["image/jpeg","image/jpg","image/png","image/webp"];if(!validTypes.includes(file.type)||file.size>5*1024*1024){setAvatarError("Please select a JPG, PNG, or WebP image under 5MB.");return;}console.log("FILE_SELECTED",{type:file.type,size:file.size});console.log("FILE_VALIDATION_PASSED");setAvatarPreview(URL.createObjectURL(file));setUploading(true);try{const client=requireClient();const {data:sessionData,error:sessionError}=await client.auth.getSession();if(sessionError||!sessionData.session){setAvatarError("Please log in again to upload a profile picture.");return;}console.log("USER_AUTHENTICATED");const safeName=file.name.toLowerCase().replace(/[^a-z0-9._-]/g,"_");const path=profile.id+"/"+Date.now()+"-"+safeName;console.log("STORAGE_UPLOAD_STARTED",{bucket:"avatars",path});const uploaded=await client.storage.from("avatars").upload(path,file,{contentType:file.type==="image/jpg"?"image/jpeg":file.type,upsert:false});console.log("STORAGE_UPLOAD_RESULT",{path,error:uploaded.error?.message||null});if(uploaded.error){if(uploaded.error.message?.toLowerCase().includes("bucket"))throw new Error("Profile picture storage is not configured correctly.");if(uploaded.error.statusCode==="403"||uploaded.error.message?.toLowerCase().includes("permission"))throw new Error("You don't have permission to upload this image.");throw uploaded.error;}const url=client.storage.from("avatars").getPublicUrl(path).data.publicUrl;if(!url)throw new Error("Profile picture storage is not configured correctly.");console.log("AVATAR_URL_CREATED");console.log("PROFILE_UPDATE_STARTED",{profile_id:profile.id});const {data:updated,error:profileError}=await client.from(PROFILE_TABLE).update({avatar_url:url}).eq("id",sessionData.session.user.id).select("id,full_name,email,university,department,level,avatar_url,bio,is_verified,verification_status,created_at,updated_at").single();console.log("PROFILE_UPDATE_RESULT",{success:!profileError,error:profileError?.message||null});if(profileError)throw new Error("Your image uploaded, but your profile could not be updated.");await onSave(updated);setAvatarPreview(url);}catch(error){console.error("Boopa avatar upload failed:",{message:error?.message,code:error?.code,status:error?.status});setAvatarPreview(profile.avatar_url||"");setAvatarError(error?.message||"Profile picture upload failed. Please try again.");}finally{setUploading(false);}};
-  const enablePush=async()=>{const unsupported=pushSupportMessage();if(unsupported){setAvatarError(unsupported);return;}const result=await registerPushSubscription(profile.id);setAvatarError(result.ok?"Phone notifications enabled.":result.error);};
-  return <div className="profile-card"><div className="profile-pfp"><Avatar name={profile.full_name} photo={avatarPreview} size={88}/>{editing&&<><input ref={avatarInputRef} id="profile-avatar" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={uploadAvatar} disabled={uploading}/><label htmlFor="profile-avatar" className="cta-secondary">{uploading?"Uploading…":"Change profile picture"}</label>{avatarError&&<p className="verification-status error">{avatarError}</p>}</>}<h2>{profile.full_name}{isVerified&&<VerifiedBadge/>}</h2><div className="department">{profile.department}</div><div className="university">{profile.university}</div></div>{editing?<form className="edit-fields" onSubmit={save}><div className="field"><label htmlFor="edit-name">Name</label><input id="edit-name" value={draft.full_name} onChange={update("full_name")} required /></div><div className="field"><label htmlFor="edit-email">Email for billing</label><input id="edit-email" type="email" value={draft.email||""} onChange={update("email")} placeholder="you@example.com" required /></div><div className="field"><label htmlFor="edit-university">University</label><input id="edit-university" value={draft.university} onChange={update("university")} required /></div><div className="field"><label htmlFor="edit-department">Department</label><input id="edit-department" value={draft.department} onChange={update("department")} required /></div><div className="field"><label htmlFor="edit-level">Level</label><select id="edit-level" value={draft.level} onChange={update("level")} required>{LEVELS.map(item=><option key={item} value={item}>{item} Level</option>)}</select></div><div className="field"><label htmlFor="edit-bio">Bio</label><input id="edit-bio" value={draft.bio||""} onChange={update("bio")} /></div><button className="submit-btn" type="submit">Save changes</button></form>:<><div className="info-row"><span>Level</span><b>{profile.level} Level</b></div><div className="info-row"><span>WhatsApp</span><b>{profile.number}</b></div><div className="verification-card"><h3><VerifiedBadge/> Get Verified</h3><p>Build trust and stand out on Boopa.</p><button className="submit-btn" onClick={onOpenVerification}>Get Verified</button></div><button className="cta-secondary" onClick={enablePush} style={{marginTop:16}}>Enable phone notifications</button><button className="cta-secondary" onClick={()=>{setDraft(profile);setAvatarPreview(profile.avatar_url||"");setEditing(true);}} style={{marginTop:16}}>Edit profile</button></>}<button className="submit-btn" onClick={onLogout} style={{marginTop:20}}>Log out</button></div>;
+  const togglePush=async()=>{if(pushBusy)return;setPushBusy(true);setAvatarError("");try{const result=await setPushEnabled(profile.id,!pushState.enabled);setPushState(result);if(result.message)setAvatarError(result.message);}catch(error){console.error("[Boopa Push] Toggle failed:",error);setAvatarError("Unable to update notification settings. Please try again.");}finally{setPushBusy(false);}};
+  return <div className="profile-card"><div className="profile-pfp"><Avatar name={profile.full_name} photo={avatarPreview} size={88}/>{editing&&<><input ref={avatarInputRef} id="profile-avatar" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={uploadAvatar} disabled={uploading}/><label htmlFor="profile-avatar" className="cta-secondary">{uploading?"Uploading…":"Change profile picture"}</label>{avatarError&&<p className="verification-status error">{avatarError}</p>}</>}<h2>{profile.full_name}{isVerified&&<VerifiedBadge/>}</h2><div className="department">{profile.department}</div><div className="university">{profile.university}</div></div>{editing?<form className="edit-fields" onSubmit={save}><div className="field"><label htmlFor="edit-name">Name</label><input id="edit-name" value={draft.full_name} onChange={update("full_name")} required /></div><div className="field"><label htmlFor="edit-email">Email for billing</label><input id="edit-email" type="email" value={draft.email||""} onChange={update("email")} placeholder="you@example.com" required /></div><div className="field"><label htmlFor="edit-university">University</label><input id="edit-university" value={draft.university} onChange={update("university")} required /></div><div className="field"><label htmlFor="edit-department">Department</label><input id="edit-department" value={draft.department} onChange={update("department")} required /></div><div className="field"><label htmlFor="edit-level">Level</label><select id="edit-level" value={draft.level} onChange={update("level")} required>{LEVELS.map(item=><option key={item} value={item}>{item} Level</option>)}</select></div><div className="field"><label htmlFor="edit-bio">Bio</label><input id="edit-bio" value={draft.bio||""} onChange={update("bio")} /></div><button className="submit-btn" type="submit">Save changes</button></form>:<><div className="info-row"><span>Level</span><b>{profile.level} Level</b></div><div className="info-row"><span>WhatsApp</span><b>{profile.number}</b></div><div className="verification-card"><h3><VerifiedBadge/> Get Verified</h3><p>Build trust and stand out on Boopa.</p><button className="submit-btn" onClick={onOpenVerification}>Get Verified</button></div><div className="push-setting"><div><b>Notifications</b><p>Receive notifications for messages, friend requests and other Boopa activity.</p>{pushState.message&&<p>{pushState.message}</p>}</div><button className={"push-toggle "+(pushState.enabled?"on":"")} onClick={togglePush} disabled={pushBusy||pushState.status==="UNSUPPORTED"||pushState.status==="BLOCKED"} aria-label={pushState.enabled?"Turn notifications off":"Turn notifications on"} aria-pressed={pushState.enabled}><span/></button></div><button className="cta-secondary" onClick={()=>{setDraft(profile);setAvatarPreview(profile.avatar_url||"");setEditing(true);}} style={{marginTop:16}}>Edit profile</button></>}<button className="submit-btn" onClick={onLogout} style={{marginTop:20}}>Log out</button></div>;
 }
 
 function PersonProfile({student,onBack,onMessage}){
@@ -614,12 +658,13 @@ function PersonProfile({student,onBack,onMessage}){
 }
 
 function Messages({target,onBack}){
-  const [items,setItems]=useState([]); const [text,setText]=useState(""); const [loading,setLoading]=useState(true); const [error,setError]=useState(""); const [sending,setSending]=useState(false);
+  const [items,setItems]=useState([]); const [text,setText]=useState(""); const [loading,setLoading]=useState(true); const [error,setError]=useState(""); const [sending,setSending]=useState(false); const bodyRef=useRef(null); const nearBottom=useRef(true);
   if(!target)return <div className="motion-in"><div className="page-head"><h2>Messages</h2><p>Open a connected student's profile to start a conversation.</p></div><EmptyState icon="feed" title="No conversation selected" body="Your messages will appear here when you choose Message from a connected profile."/></div>;
   const load=async()=>{try{const session=await getSession();if(!session)throw new Error("Please log in again.");const client=requireClient();const {data,error:queryError}=await client.from("messages").select("id,sender_id,receiver_id,content,is_read,created_at").or("and(sender_id.eq."+session.user.id+",receiver_id.eq."+target.id+"),and(sender_id.eq."+target.id+",receiver_id.eq."+session.user.id+")").order("created_at",{ascending:true});if(queryError)throw queryError;setItems(data||[]);await client.from("messages").update({is_read:true}).eq("sender_id",target.id).eq("receiver_id",session.user.id).eq("is_read",false);}catch(err){setError(err.message||"Unable to load messages.");}finally{setLoading(false);}};
   useEffect(()=>{load();const client=requireClient();const channel=client.channel("conversation-"+target.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},payload=>{const row=payload.new;if(row&&(row.sender_id===target.id||row.receiver_id===target.id)){setItems(current=>current.some(item=>item.id===row.id)?current:[...current,row]);if(row.sender_id===target.id)client.from("messages").update({is_read:true}).eq("id",row.id);}}).subscribe();return()=>{client.removeChannel(channel);};},[target.id]);
+  useEffect(()=>{if(nearBottom.current&&bodyRef.current)bodyRef.current.scrollTop=bodyRef.current.scrollHeight;},[items]);
   const send=async e=>{e.preventDefault();const body=text.trim();if(!body||sending)return;setError("");setSending(true);try{const session=await getSession();if(!session)throw new Error("Please log in again.");if(session.user.id===target.id)throw new Error("You cannot message yourself.");const {data:connection,error:connectionError}=await requireClient().from("friend_requests").select("id").or("and(sender_id.eq."+session.user.id+",receiver_id.eq."+target.id+"),and(sender_id.eq."+target.id+",receiver_id.eq."+session.user.id+")").eq("status","accepted").limit(1);if(connectionError)throw connectionError;if(!connection?.length)throw new Error("Connect with this student before messaging them.");const {error:sendError}=await requireClient().from("messages").insert({sender_id:session.user.id,receiver_id:target.id,content:body,is_read:false});if(sendError)throw sendError;setText("");}catch(err){setError(err.message||"Unable to send message.");}finally{setSending(false);}};
-  return <div className="motion-in chat-shell"><div className="chat-head"><button className="back-btn" onClick={onBack} aria-label="Back">←</button><Avatar name={target.full_name} photo={target.avatar_url} size={42}/><div><h2>{target.full_name}</h2><div className="chat-status">Connected</div></div></div><div className="chat-body">{loading?[1,2,3].map(item=><div className="skeleton" key={item}/>):error?<EmptyState icon="feed" title="Unable to load messages" body={error}/>:items.length?items.map(item=><div key={item.id} className={"chat-bubble-row "+(item.sender_id===target.id?"":"mine")}><div className="chat-bubble"><div>{item.content}</div><div className="chat-time">{new Date(item.created_at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</div></div></div>):<div className="chat-empty"><Avatar name={target.full_name} photo={target.avatar_url} size={58}/><b>You and {target.full_name} are connected</b><div>Start a conversation 👋</div></div>}</div><form className="chat-composer" onSubmit={send}><input value={text} onChange={e=>setText(e.target.value)} placeholder={"Message "+target.full_name+"…"} aria-label="Message" onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();e.currentTarget.form.requestSubmit();}}}/><button className="submit-btn" type="submit" disabled={sending||!text.trim()}>{sending?"…":"Send"}</button></form></div>;
+  return <div className="motion-in chat-shell"><div className="chat-head"><button className="back-btn" onClick={onBack} aria-label="Back">←</button><Avatar name={target.full_name} photo={target.avatar_url} size={42}/><div><h2>{target.full_name}</h2><div className="chat-status">Connected</div></div></div><div ref={bodyRef} className="chat-body" onScroll={e=>{const el=e.currentTarget;nearBottom.current=el.scrollHeight-el.scrollTop-el.clientHeight<80;}}>{loading?[1,2,3].map(item=><div className="skeleton" key={item}/>):error?<EmptyState icon="feed" title="Unable to load messages" body={error}/>:items.length?items.map(item=><div key={item.id} className={"chat-bubble-row "+(item.sender_id===target.id?"":"mine")}><div className="chat-bubble"><div>{item.content}</div><div className="chat-time">{new Date(item.created_at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</div></div></div>):<div className="chat-empty"><Avatar name={target.full_name} photo={target.avatar_url} size={58}/><b>You and {target.full_name} are connected</b><div>Start a conversation 👋</div></div>}</div><form className="chat-composer" onSubmit={send}><input value={text} onChange={e=>setText(e.target.value)} placeholder={"Message "+target.full_name+"…"} aria-label="Message" onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();e.currentTarget.form.requestSubmit();}}}/><button className="submit-btn" type="submit" disabled={sending||!text.trim()}>{sending?"…":"Send"}</button></form></div>;
 }
 
 function App({profile,onLogout}){
@@ -636,7 +681,7 @@ function App({profile,onLogout}){
   const openCommunity=community=>{setSelected({type:"community",value:community});setTab("communities")};
   const content=selected?(selected.type==="person"?<PersonProfile student={selected.value} onBack={()=>setSelected(null)} onMessage={student=>setSelected({type:"messages",value:student})}/>:selected.type==="messages"?<Messages target={selected.value} onBack={()=>setSelected(null)}/>:<CommunityDetail community={selected.value} onBack={()=>setSelected(null)}/>):tab==="discover"?<Discover onPerson={student=>{if(student.id===profile.id){setTab("profile");return;}setSelected({type:"person",value:student});}}/>:tab==="communities"?<Communities onOpen={openCommunity}/>:tab==="feed"?<Feed onOpen={openCommunity}/>:tab==="notifications"?<Notifications refreshKey={notificationRefresh}/>:tab==="verification"?<Verification profile={currentProfile} isVerified={isVerified} status={status} onRefresh={refreshStatus} onBack={()=>setTab("profile")} onCompleted={()=>setTab("profile")}/>:<Profile profile={currentProfile} onLogout={onLogout} onSave={saveProfile} isVerified={isVerified} onOpenVerification={()=>setTab("verification")}/>;
   const nav=[{id:"discover",icon:"compass",label:"Discover"},{id:"communities",icon:"users",label:"Communities"},{id:"feed",icon:"feed",label:"Feed"},{id:"notifications",icon:"bell",label:"Alerts"},{id:"profile",icon:"user",label:"Profile"}];
-  return <div className="app">{notificationToast&&<div className="verification-status success" style={{position:"fixed",top:16,left:16,right:16,zIndex:20,textAlign:"center"}}>{notificationToast}</div>}<header className="app-top"><Wordmark/><div style={{marginLeft:"auto",display:"flex",gap:8}}><button className="back-btn" aria-label="Toggle theme" onClick={()=>setTheme(theme==="dark"?"light":"dark")}>{theme==="dark"?"☼":"☾"}</button><button className="back-btn" aria-label="Log out" onClick={onLogout}><Icon name="arrow-left" size={17}/></button></div></header><main className="app-content">{content}</main><nav className="bottom-nav">{nav.map(item=><button key={item.id} className={tab===item.id&&!selected?"active":""} onClick={()=>{setSelected(null);setTab(item.id);if(item.id==="notifications")setNotificationCount(0)}}><Icon name={item.icon} size={19}/>{item.label}{item.id==="notifications"&&notificationCount>0&&<span style={{marginLeft:4,fontSize:11,fontWeight:700}}>{notificationCount}</span>}</button>)}</nav></div>;
+  return <div className="app">{notificationToast&&<div className="verification-status success" style={{position:"fixed",top:16,left:16,right:16,zIndex:20,textAlign:"center"}}>{notificationToast}</div>}<header className="app-top"><Wordmark/><div style={{marginLeft:"auto",display:"flex",gap:8}}><button className="back-btn" aria-label="Toggle theme" onClick={()=>setTheme(theme==="dark"?"light":"dark")}>{theme==="dark"?"☼":"☾"}</button><button className="back-btn" aria-label="Log out" onClick={onLogout}><Icon name="arrow-left" size={17}/></button></div></header><main className={"app-content "+(selected?.type==="messages"?"chat-mode":"")}>{content}</main><nav className="bottom-nav">{nav.map(item=><button key={item.id} className={tab===item.id&&!selected?"active":""} onClick={()=>{setSelected(null);setTab(item.id);if(item.id==="notifications")setNotificationCount(0)}}><Icon name={item.icon} size={19}/>{item.label}{item.id==="notifications"&&notificationCount>0&&<span style={{marginLeft:4,fontSize:11,fontWeight:700}}>{notificationCount}</span>}</button>)}</nav></div>;
 }
 
 function Root(){
