@@ -15,6 +15,15 @@ Deno.serve(async request => {
     if (!publicKey || !privateKey) return json({ error: "Push service is not configured." }, 500);
     webpush.setVapidDetails(Deno.env.get("VAPID_SUBJECT") || "mailto:admin@boopa.app", publicKey, privateKey);
     const admin = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    if (record.type === "message" && record.actor_id) {
+      const { data: presence, error: presenceError } = await admin.from("active_chat_presence")
+        .select("user_id")
+        .eq("user_id", record.user_id)
+        .eq("chat_user_id", record.actor_id)
+        .gt("updated_at", new Date(Date.now() - 90000).toISOString())
+        .maybeSingle();
+      if (!presenceError && presence) return json({ sent: 0, skipped: "active_chat" });
+    }
     const { data: subscriptions, error } = await admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", record.user_id);
     if (error) throw error;
     const senderResult = record.actor_id ? await admin.from("profiles").select("full_name").eq("id", record.actor_id).maybeSingle() : { data: null };

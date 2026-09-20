@@ -42,6 +42,25 @@ Webhook for `public.notifications` INSERT events pointing to that function with
 the `x-push-webhook-secret` header. The `202609201800_push_notifications.sql`
 migration creates the private subscription table and RLS policies.
 
+Also apply `202609201900_push_presence.sql` so the push function can suppress
+message pushes while the recipient is actively viewing that exact chat.
+
+For Vercel, add only the browser-safe value:
+
+```text
+PUSH_VAPID_PUBLIC_KEY=<the same VAPID public key used in config.js>
+```
+
+The deployed `config.js` must expose that value as `pushVapidPublicKey`. Keep
+`VAPID_PRIVATE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `PUSH_WEBHOOK_SECRET` in
+Supabase Edge Function secrets, never in Vercel frontend variables or browser
+JavaScript. The Database Webhook should send notification inserts to the
+deployed `push-notification` function.
+
+The static deployment must inject `PUSH_VAPID_PUBLIC_KEY` into `config.js`;
+adding it to Vercel alone does not automatically expose it to this static
+HTML app.
+
 ```sh
 supabase functions deploy push-notification
 supabase secrets set VAPID_SUBJECT=mailto:admin@boopa.app VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... PUSH_WEBHOOK_SECRET=...
