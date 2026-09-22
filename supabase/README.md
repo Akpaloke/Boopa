@@ -10,6 +10,7 @@ supabase functions deploy verification-cancel
 supabase functions deploy paystack-webhook
 supabase functions deploy community-verification-initialize
 supabase functions deploy boopa-notifications --no-verify-jwt
+supabase functions deploy boopa-onesignal --no-verify-jwt
 ```
 
 The frontend calls `initialize-verification-payment`. The older

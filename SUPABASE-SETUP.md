@@ -19,6 +19,27 @@ Apply all migrations in `supabase/migrations`, including `202609200935_avatar_st
 
 ## Web Push notifications
 
+### Optional OneSignal delivery
+
+OneSignal can replace the custom Web Push delivery function for closed-app
+notifications. Set `oneSignalAppId` in `config.js` to the OneSignal Web Push
+App ID. The frontend associates the signed-in Supabase user ID as the
+OneSignal external ID. Never expose the OneSignal REST API key in frontend
+code.
+
+Deploy `supabase/functions/boopa-onesignal` with:
+
+```sh
+supabase functions deploy boopa-onesignal --no-verify-jwt
+supabase secrets set ONESIGNAL_APP_ID=<your OneSignal App ID> ONESIGNAL_REST_API_KEY=<server-only REST API key> PUSH_WEBHOOK_SECRET=<webhook secret>
+```
+
+Point the `public.notifications` INSERT webhook to:
+
+`https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/boopa-onesignal`
+
+Use the same `x-push-webhook-secret` header configured in the function secrets.
+
 The browser registers `/service-worker.js` only after the user chooses
 **Enable phone notifications** and `pushVapidPublicKey` is configured.
 Set the VAPID public key in `config.js` (it is safe to expose); keep the
