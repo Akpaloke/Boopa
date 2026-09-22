@@ -350,6 +350,22 @@ const supabaseClient = (() => {
 })();
 const PROFILE_TABLE = "profiles";
 const getSession = async () => supabaseClient ? (await supabaseClient.auth.getSession()).data.session : null;
+let oneSignalVerificationShown=false;
+const showOneSignalVerificationDialog = OneSignal => {
+  if(oneSignalVerificationShown||document.getElementById("onesignal-verification-dialog"))return;
+  oneSignalVerificationShown=true;
+  const overlay=document.createElement("div");
+  overlay.id="onesignal-verification-dialog";
+  overlay.style.cssText="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:20px;";
+  const card=document.createElement("div");
+  card.style.cssText="width:min(420px,100%);background:var(--surface,#fff);color:var(--text,#131316);border-radius:18px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);";
+  card.innerHTML="<h3 style='margin:0 0 10px'>Your OneSignal SDK integration is complete!</h3><p style='line-height:1.5;margin:0 0 20px'>You can now send Push Notifications &amp; In-App Messages through OneSignal. Tap below to enable push notifications.</p>";
+  const button=document.createElement("button");
+  button.className="submit-btn";
+  button.textContent="Got it";
+  button.onclick=async()=>{try{await OneSignal.Notifications.requestPermission();}catch(error){console.error("Boopa OneSignal permission request failed:",error);}finally{overlay.remove();}};
+  card.appendChild(button);overlay.appendChild(card);document.body.appendChild(overlay);
+};
 const initOneSignal = userId => {
   if(!BOOPA_CONFIG.oneSignalAppId||!userId)return;
   window.OneSignalDeferred=window.OneSignalDeferred||[];
@@ -357,6 +373,11 @@ const initOneSignal = userId => {
     try{
       await OneSignal.init({appId:BOOPA_CONFIG.oneSignalAppId,serviceWorkerPath:"/OneSignalSDKWorker.js"});
       await OneSignal.login(userId);
+      const checkSubscription=subscriptionId=>{
+        if(subscriptionId&&typeof subscriptionId==="string"&&!subscriptionId.startsWith("local-"))showOneSignalVerificationDialog(OneSignal);
+      };
+      OneSignal.User?.PushSubscription?.addEventListener?.("change",event=>checkSubscription(event?.current?.id||event?.id));
+      checkSubscription(OneSignal.User?.PushSubscription?.id);
     }catch(error){console.error("Boopa OneSignal initialization failed:",error);}
   });
 };

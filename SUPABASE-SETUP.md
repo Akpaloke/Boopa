@@ -19,13 +19,11 @@ Apply all migrations in `supabase/migrations`, including `202609200935_avatar_st
 
 ## Web Push notifications
 
-### Optional OneSignal delivery
+### OneSignal delivery
 
-OneSignal can replace the custom Web Push delivery function for closed-app
-notifications. Set `oneSignalAppId` in `config.js` to the OneSignal Web Push
-App ID. The frontend associates the signed-in Supabase user ID as the
-OneSignal external ID. Never expose the OneSignal REST API key in frontend
-code.
+OneSignal delivers closed-app notifications. The frontend uses the OneSignal
+Web Push App ID and associates the signed-in Supabase user ID as the OneSignal
+external ID. Never expose the OneSignal REST API key in frontend code.
 
 Deploy `supabase/functions/boopa-onesignal` with:
 

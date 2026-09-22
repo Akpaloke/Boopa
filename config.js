@@ -5,8 +5,8 @@ window.BOOPA_CONFIG = window.BOOPA_CONFIG || {
   paymentApiBaseUrl: "",
   paystackPublicKey: "pk_live_3fcd540323b6d8cb53bebb18f5febc8ebb47c119",
   paystackPlanCode: "PLN_wr6p28z1zstqalb",
-  // Optional OneSignal Web Push app ID. Keep the REST API key server-side.
-  oneSignalAppId: "",
+  // Public OneSignal Web Push App ID. Keep the REST API key server-side.
+  oneSignalAppId: "b4c4b621-a7a2-4d79-a990-6a6968946f23",
   // Set this to the browser-safe VAPID public key used by the push Edge Function.
   pushVapidPublicKey: "BGSSSuv5NQ6LbtGcwWfO-aIMyLv-9M-r2id_JzbrprkrwrQQFGFQ_vHn7vD_hfvJcg6LFS_V16CHX3QKwiUh-ps"
 };
