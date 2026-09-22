@@ -1,11 +1,14 @@
 {
   "name": "Boopa",
   "short_name": "Boopa",
+  "description": "Meet students who share your ambitions — coursemates, project partners, and the people in your community.",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "theme_color": "#131316",
   "background_color": "#FBFBFC",
   "icons": [
-    { "src": "/boopa-icon.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/boopa-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/boopa-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
