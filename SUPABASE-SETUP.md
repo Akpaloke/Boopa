@@ -37,7 +37,8 @@ Generate a key pair once if you do not already have one:
 npx web-push generate-vapid-keys
 ```
 
-Deploy `supabase/functions/push-notification`, then create a Supabase Database
+Deploy `supabase/functions/push-notification` with JWT verification disabled,
+then create a Supabase Database
 Webhook for `public.notifications` INSERT events pointing to that function with
 the `x-push-webhook-secret` header. This webhook is required: Realtime updates
 the open Boopa app, while the webhook sends a Web Push notification to the
@@ -48,6 +49,16 @@ Dashboard → Database → Webhooks:
 * Events: `INSERT`
 * URL: `https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/push-notification`
 * Header: `x-push-webhook-secret: <the exact PUSH_WEBHOOK_SECRET>`
+
+When using the CLI, deploy it with:
+
+```sh
+supabase functions deploy push-notification --no-verify-jwt
+```
+
+The function still rejects every request without the matching
+`x-push-webhook-secret`; disabling the platform JWT check is only for allowing
+the Database Webhook to invoke it.
 
 The `202609201800_push_notifications.sql` migration creates the private
 subscription table and RLS policies.
@@ -72,7 +83,7 @@ adding it to Vercel alone does not automatically expose it to this static
 HTML app.
 
 ```sh
-supabase functions deploy push-notification
+supabase functions deploy push-notification --no-verify-jwt
 supabase secrets set VAPID_SUBJECT=mailto:admin@boopa.app VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... PUSH_WEBHOOK_SECRET=...
 ```
 

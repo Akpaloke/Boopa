@@ -1,4 +1,4 @@
-const CACHE_NAME = "boopa-shell-v1";
+const CACHE_NAME = "boopa-shell-v2";
 const SHELL_ASSETS = [
   "/",
   "/index.html",
@@ -34,8 +34,10 @@ self.addEventListener("push", event => {
   const message = data.message ? `${data.body || ""}\n"${data.message}"` : (data.body || "You have a new notification.");
   event.waitUntil(self.registration.showNotification(title, {
     body: message,
-    icon: data.icon || "/favicon.ico",
+    icon: data.icon || "/boopa-icon-192.png",
+    badge: data.badge || "/boopa-icon-192.png",
     tag: data.tag || `boopa-${data.type || "notification"}-${data.senderId || "general"}`,
+    renotify: true,
     data: { chatUrl: data.chatUrl || data.url || "/", profileUrl: data.profileUrl || null }
   }));
 });
