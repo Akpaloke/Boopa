@@ -39,8 +39,18 @@ npx web-push generate-vapid-keys
 
 Deploy `supabase/functions/push-notification`, then create a Supabase Database
 Webhook for `public.notifications` INSERT events pointing to that function with
-the `x-push-webhook-secret` header. The `202609201800_push_notifications.sql`
-migration creates the private subscription table and RLS policies.
+the `x-push-webhook-secret` header. This webhook is required: Realtime updates
+the open Boopa app, while the webhook sends a Web Push notification to the
+phone when the app is backgrounded or closed. Configure it in Supabase
+Dashboard → Database → Webhooks:
+
+* Table: `public.notifications`
+* Events: `INSERT`
+* URL: `https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/push-notification`
+* Header: `x-push-webhook-secret: <the exact PUSH_WEBHOOK_SECRET>`
+
+The `202609201800_push_notifications.sql` migration creates the private
+subscription table and RLS policies.
 
 Also apply `202609201900_push_presence.sql` so the push function can suppress
 message pushes while the recipient is actively viewing that exact chat.
@@ -65,6 +75,13 @@ HTML app.
 supabase functions deploy push-notification
 supabase secrets set VAPID_SUBJECT=mailto:admin@boopa.app VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... PUSH_WEBHOOK_SECRET=...
 ```
+
+After deployment, each user must enable **Phone notifications** once from
+their Boopa profile. The browser permission prompt is required by Android and
+iOS; on iPhone, Boopa must be installed to the Home Screen for Web Push to
+appear as a normal phone notification. The subscription is stored per user
+and device in `public.push_subscriptions`, and revoked subscriptions are
+removed automatically when a phone reports them as expired.
 
 ## Paystack backend
 

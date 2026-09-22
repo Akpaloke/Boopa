@@ -9,6 +9,7 @@ supabase functions deploy verification-status
 supabase functions deploy verification-cancel
 supabase functions deploy paystack-webhook
 supabase functions deploy community-verification-initialize
+supabase functions deploy push-notification
 ```
 
 The frontend calls `initialize-verification-payment`. The older
