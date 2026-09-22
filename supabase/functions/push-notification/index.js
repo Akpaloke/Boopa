@@ -30,7 +30,8 @@ Deno.serve(async request => {
     const senderName = senderResult.data?.full_name || "Someone";
     const type = record.type || "notification";
     const message = type === "message" ? record.message.replace(/^.*sent you a new message\.\s*/i, "").slice(0, 240) : "";
-    const notification = { type, title: type === "message" ? "💬 Boopa" : "Boopa", body: type === "message" ? `${senderName} sent you a message` : record.message, message, senderId: record.actor_id || null, chatUrl: type === "message" && record.actor_id ? `/?open=messages&user_id=${encodeURIComponent(record.actor_id)}` : "/?open=notifications" };
+    const actorUrl = record.actor_id ? `/?open=profile&user_id=${encodeURIComponent(record.actor_id)}` : "/?open=notifications";
+    const notification = { type, title: type === "message" ? "💬 Boopa" : "Boopa", body: type === "message" ? `${senderName} sent you a message` : record.message, message, senderId: record.actor_id || null, profileUrl: actorUrl, chatUrl: type === "message" && record.actor_id ? `/?open=messages&user_id=${encodeURIComponent(record.actor_id)}` : actorUrl };
     await Promise.all((subscriptions || []).map(async subscription => {
       try {
         await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify(notification));
