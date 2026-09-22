@@ -38,6 +38,9 @@ self.addEventListener("push", event => {
     badge: data.badge || "/boopa-icon-192.png",
     tag: data.tag || `boopa-${data.type || "notification"}-${data.senderId || "general"}`,
     renotify: true,
+    silent: false,
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
     data: {
       url: data.profileUrl || data.chatUrl || data.url || "/",
       chatUrl: data.chatUrl || data.url || "/",
