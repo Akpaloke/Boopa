@@ -411,6 +411,24 @@ const pushSupportMessage = () => {
   const state=pushDiagnostics();
   return state.message;
 };
+const showForegroundNotification = async notification => {
+  if(!notification||!("Notification" in window)||Notification.permission!=="granted"||document.visibilityState!=="visible") return;
+  try {
+    const registration=await navigator.serviceWorker.getRegistration("/service-worker.js");
+    if(!registration)return;
+    const actorUrl=notification.actor_id?`/?open=profile&user_id=${encodeURIComponent(notification.actor_id)}`:"/?open=notifications";
+    await registration.showNotification(notification.type==="message"?"💬 Boopa":"Boopa",{
+      body:notification.message||"You have a new Boopa notification.",
+      icon:"/boopa-icon-192.png",
+      badge:"/boopa-icon-192.png",
+      tag:`boopa-live-${notification.id||Date.now()}`,
+      renotify:true,
+      data:{url:actorUrl,profileUrl:actorUrl}
+    });
+  } catch(error) {
+    console.error("Boopa foreground notification failed:",error);
+  }
+};
 const requireClient = () => {
   if (!supabaseClient) throw new Error("Supabase is not configured for this deployment.");
   return supabaseClient;
@@ -758,7 +776,7 @@ function App({profile,onLogout}){
   useEffect(()=>{const online=()=>setOffline(false);const offlineState=()=>setOffline(true);window.addEventListener("online",online);window.addEventListener("offline",offlineState);return()=>{window.removeEventListener("online",online);window.removeEventListener("offline",offlineState);};},[]);
   useEffect(()=>{const viewport=window.visualViewport;if(!viewport)return;const updateViewport=()=>{const keyboardInset=Math.max(0,window.innerHeight-viewport.height-viewport.offsetTop);document.documentElement.style.setProperty("--boopa-keyboard-inset",keyboardInset+"px");document.documentElement.style.setProperty("--boopa-bottom-nav-height",keyboardInset>80?"0px":"72px");};updateViewport();viewport.addEventListener("resize",updateViewport);viewport.addEventListener("scroll",updateViewport);return()=>{viewport.removeEventListener("resize",updateViewport);viewport.removeEventListener("scroll",updateViewport);document.documentElement.style.removeProperty("--boopa-keyboard-inset");document.documentElement.style.removeProperty("--boopa-bottom-nav-height");};},[]);
   useEffect(()=>{let active=true;(async()=>{try{const {data,error}=await requireClient().rpc("get_profile_for_view",{target_user_id:profile.id});if(error)throw error;if(active&&data?.[0])setCurrentProfile(normalizeProfile(data[0]));}catch(error){console.error("Boopa profile hydration failed:",{message:error?.message,code:error?.code,status:error?.status});}})();return()=>{active=false;};},[profile.id]);
-  useEffect(()=>{let active=true;const client=requireClient();(async()=>{const session=await getSession();if(!session||session.user.id!==profile.id)return;const {count,error}=await client.from("notifications").select("id",{count:"exact",head:true}).eq("user_id",profile.id).is("read_at",null);if(!error&&active)setNotificationCount(count||0);})();const channel=client.channel("user-notifications-"+profile.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"notifications",filter:"user_id=eq."+profile.id},payload=>{if(!active)return;const newNotification=payload.new||{};setNotificationCount(count=>count+1);setNotificationRefresh(value=>value+1);const isOpenConversation=selected&&selected.type==="messages"&&selected.value&&selected.value.id===newNotification.actor_id;if(!isOpenConversation){setNotificationToast(newNotification.message||"You have a new notification.");setTimeout(()=>setNotificationToast(""),4500);} }).subscribe();return()=>{active=false;client.removeChannel(channel);};},[profile.id, selected]);
+  useEffect(()=>{let active=true;const client=requireClient();(async()=>{const session=await getSession();if(!session||session.user.id!==profile.id)return;const {count,error}=await client.from("notifications").select("id",{count:"exact",head:true}).eq("user_id",profile.id).is("read_at",null);if(!error&&active)setNotificationCount(count||0);})();const channel=client.channel("user-notifications-"+profile.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"notifications",filter:"user_id=eq."+profile.id},payload=>{if(!active)return;const newNotification=payload.new||{};setNotificationCount(count=>count+1);setNotificationRefresh(value=>value+1);showForegroundNotification(newNotification);const isOpenConversation=selected&&selected.type==="messages"&&selected.value&&selected.value.id===newNotification.actor_id;if(!isOpenConversation){setNotificationToast(newNotification.message||"You have a new notification.");setTimeout(()=>setNotificationToast(""),4500);} }).subscribe();return()=>{active=false;client.removeChannel(channel);};},[profile.id, selected]);
   useEffect(()=>{const onPushClick=event=>{if(event.data?.type==="BOOPA_NOTIFICATION_CLICK"&&event.data.url)window.location.href=event.data.url;};navigator.serviceWorker?.addEventListener("message",onPushClick);return()=>navigator.serviceWorker?.removeEventListener("message",onPushClick);},[]);
   useEffect(()=>{const params=new URLSearchParams(window.location.search);const userId=params.get("user_id");const open=params.get("open");if(userId&&(open==="messages"||open==="profile")){requireClient().rpc("get_profile_for_view",{target_user_id:userId}).then(result=>{if(!result.error&&result.data?.[0]){const value=normalizeProfile(result.data[0]);setSelected({type:open==="messages"?"messages":"person",value});}});}},[]);
   const refreshStatus=async()=>{try{const base=(window.BOOPA_CONFIG?.paymentApiBaseUrl||"").replace(/\/$/,"");const response=await fetch(base+"/api/payments/status",{headers:await authHeaders()});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||("Subscription status failed ("+response.status+")."));setStatus(result);}catch(error){console.error("Boopa verification status failed:",error);setStatus({status:"unavailable",error:error.message||"Unable to load subscription status. Please try again."});}};
