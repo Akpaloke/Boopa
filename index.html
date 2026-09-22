@@ -381,10 +381,9 @@ const setPushEnabled = async (userId,enabled) => {
     const registration=await navigator.serviceWorker.getRegistration("/service-worker.js");
     const subscription=registration&&await registration.pushManager.getSubscription();
     if(subscription){await subscription.unsubscribe();await requireClient().from("push_subscriptions").delete().eq("user_id",userId).eq("endpoint",subscription.endpoint);}
-    return {status:"SUPPORTED",enabled:false,message:"Notifications disabled."};
+    return {status:"SUPPORTED",enabled:false,message:"Phone notifications are off."};
   }
-  if(base.status==="BLOCKED"||base.status==="UNSUPPORTED") return {...base,enabled:false};
-  if(!BOOPA_CONFIG.pushVapidPublicKey) return {...base,enabled:false};
+  if(base.status==="BLOCKED"||base.status==="UNSUPPORTED"||base.status==="NOT_CONFIGURED") return {...base,enabled:false};
   try {
     if(Notification.permission==="default"){
       console.debug("[Boopa Notifications] Requesting permission");
@@ -392,19 +391,36 @@ const setPushEnabled = async (userId,enabled) => {
       if(permission!=="granted") return {status:permission==="denied"?"BLOCKED":"PERMISSION_REQUIRED",enabled:false,message:permission==="denied"?"Notifications are blocked. Please enable them in your browser settings.":"Notification permission was not granted."};
     }
     console.debug("[Boopa Notifications] Registering service worker");
-    const registration=await navigator.serviceWorker.register("/service-worker.js");
-    console.debug("[Boopa Notifications] Creating subscription");
-    const bytes=Uint8Array.from(atob(BOOPA_CONFIG.pushVapidPublicKey.replace(/-/g,"+").replace(/_/g,"/")+"=="),char=>char.charCodeAt(0));
-    const subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
+    await navigator.serviceWorker.register("/service-worker.js");
+    const registration=await navigator.serviceWorker.ready;
+    let subscription=await registration.pushManager.getSubscription();
+    if(!subscription){
+      console.debug("[Boopa Notifications] Creating subscription");
+      const encoded=BOOPA_CONFIG.pushVapidPublicKey.replace(/-/g,"+").replace(/_/g,"/");
+      const padded=encoded+"=".repeat((4-(encoded.length%4))%4);
+      const binary=atob(padded);
+      const bytes=Uint8Array.from(binary,char=>char.charCodeAt(0));
+      if(bytes.length!==65) throw new Error("The phone-notification key is invalid. Please redeploy Boopa with the current VAPID public key.");
+      subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
+    }
     const json=subscription.toJSON();
+    if(!json.endpoint||!json.keys?.p256dh||!json.keys?.auth) throw new Error("The browser did not return a complete phone-notification subscription.");
     console.debug("[Boopa Notifications] Saving subscription");
     const {error}=await requireClient().from("push_subscriptions").upsert({user_id:userId,endpoint:json.endpoint,p256dh:json.keys?.p256dh,auth:json.keys?.auth,updated_at:new Date().toISOString()},{onConflict:"user_id,endpoint"});
     if(error) throw error;
+    await registration.showNotification("Boopa notifications enabled",{
+      body:"You will now see Boopa alerts in your phone notification bar.",
+      icon:"/boopa-icon-192.png",
+      badge:"/boopa-icon-192.png",
+      tag:"boopa-notifications-enabled",
+      data:{url:"/?open=notifications"}
+    });
     console.debug("[Boopa Push] Subscription: active");
     return {status:"ENABLED",enabled:true,message:"Notifications enabled."};
   } catch(error) {
     console.error("[Boopa Push] Subscription failed:",error);
-    return {status:"SUPPORTED",enabled:false,message:"Notifications are allowed, but this device could not create a push subscription. Please try again."};
+    const message=error?.name==="NotAllowedError"?"Notifications were blocked. Enable notifications for Boopa in your phone or browser settings.":error?.message||"This device could not create a phone-notification subscription.";
+    return {status:Notification.permission==="denied"?"BLOCKED":"SUPPORTED",enabled:false,message};
   }
 };
 const pushSupportMessage = () => {
