@@ -37,7 +37,7 @@ Generate a key pair once if you do not already have one:
 npx web-push generate-vapid-keys
 ```
 
-Deploy `supabase/functions/push-notification` with JWT verification disabled,
+Deploy `supabase/functions/boopa-notifications` with JWT verification disabled,
 then create a Supabase Database
 Webhook for `public.notifications` INSERT events pointing to that function with
 the `x-push-webhook-secret` header. This webhook is required: Realtime updates
@@ -47,13 +47,13 @@ Dashboard → Database → Webhooks:
 
 * Table: `public.notifications`
 * Events: `INSERT`
-* URL: `https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/push-notification`
+* URL: `https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/boopa-notifications`
 * Header: `x-push-webhook-secret: <the exact PUSH_WEBHOOK_SECRET>`
 
 When using the CLI, deploy it with:
 
 ```sh
-supabase functions deploy push-notification --no-verify-jwt
+supabase functions deploy boopa-notifications --no-verify-jwt
 ```
 
 The function still rejects every request without the matching
@@ -76,14 +76,14 @@ The deployed `config.js` must expose that value as `pushVapidPublicKey`. Keep
 `VAPID_PRIVATE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `PUSH_WEBHOOK_SECRET` in
 Supabase Edge Function secrets, never in Vercel frontend variables or browser
 JavaScript. The Database Webhook should send notification inserts to the
-deployed `push-notification` function.
+deployed `boopa-notifications` function.
 
 The static deployment must inject `PUSH_VAPID_PUBLIC_KEY` into `config.js`;
 adding it to Vercel alone does not automatically expose it to this static
 HTML app.
 
 ```sh
-supabase functions deploy push-notification --no-verify-jwt
+supabase functions deploy boopa-notifications --no-verify-jwt
 supabase secrets set VAPID_SUBJECT=mailto:admin@boopa.app VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... PUSH_WEBHOOK_SECRET=...
 ```
 

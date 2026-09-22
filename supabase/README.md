@@ -9,7 +9,7 @@ supabase functions deploy verification-status
 supabase functions deploy verification-cancel
 supabase functions deploy paystack-webhook
 supabase functions deploy community-verification-initialize
-supabase functions deploy push-notification --no-verify-jwt
+supabase functions deploy boopa-notifications --no-verify-jwt
 ```
 
 The frontend calls `initialize-verification-payment`. The older
@@ -45,4 +45,6 @@ The push function is intentionally deployed with JWT verification disabled becau
 Supabase Database Webhooks authenticate it with the configured
 `x-push-webhook-secret` header instead. Keep `PUSH_WEBHOOK_SECRET` set in the
 function secrets and configure the same header on the `public.notifications`
-INSERT webhook.
+INSERT webhook. Point the webhook to:
+
+`https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/boopa-notifications`
