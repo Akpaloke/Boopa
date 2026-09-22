@@ -69,7 +69,7 @@ message pushes while the recipient is actively viewing that exact chat.
 For Vercel, add only the browser-safe value:
 
 ```text
-PUSH_VAPID_PUBLIC_KEY=<the same VAPID public key used in config.js>
+PUSH_VAPID_PUBLIC_KEY=BGSSSuv5NQ6LbtGcwWfO-aIMyLv-9M-r2id_JzbrprkrwrQQFGFQ_vHn7vD_hfvJcg6LFS_V16CHX3QKwiUh-ps
 ```
 
 The deployed `config.js` must expose that value as `pushVapidPublicKey`. Keep

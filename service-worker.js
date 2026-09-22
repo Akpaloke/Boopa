@@ -38,15 +38,22 @@ self.addEventListener("push", event => {
     badge: data.badge || "/boopa-icon-192.png",
     tag: data.tag || `boopa-${data.type || "notification"}-${data.senderId || "general"}`,
     renotify: true,
-    data: { chatUrl: data.chatUrl || data.url || "/", profileUrl: data.profileUrl || null }
+    data: {
+      url: data.profileUrl || data.chatUrl || data.url || "/",
+      chatUrl: data.chatUrl || data.url || "/",
+      profileUrl: data.profileUrl || null
+    }
   }));
 });
 self.addEventListener("notificationclick", event => {
   event.notification.close();
-  const target = new URL(event.notification.data?.profileUrl || event.notification.data?.chatUrl || "/", self.location.origin).href;
+  const target = new URL(event.notification.data?.url || event.notification.data?.profileUrl || event.notification.data?.chatUrl || "/", self.location.origin).href;
   event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(openWindows => {
     const existing = openWindows.find(client => client.url.startsWith(self.location.origin));
-    if (existing) { existing.postMessage({ type: "BOOPA_NOTIFICATION_CLICK", url: target }); return existing.focus(); }
+    if (existing) {
+      existing.postMessage({ type: "BOOPA_NOTIFICATION_CLICK", url: target });
+      return existing.focus();
+    }
     return clients.openWindow(target);
   }));
 });

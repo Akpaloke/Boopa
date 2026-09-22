@@ -6,3 +6,4 @@
 # Local and generated tooling files
 .supabase/
 node_modules/
+.vercel

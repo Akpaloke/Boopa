@@ -24,14 +24,21 @@ Deno.serve(async request => {
     const message = type === "message" ? notificationText.replace(/^.*sent you a new message\.\s*/i, "").slice(0, 240) : "";
     const actorUrl = record.actor_id ? `/?open=profile&user_id=${encodeURIComponent(record.actor_id)}` : "/?open=notifications";
     const notification = { type, title: type === "message" ? "💬 Boopa" : "Boopa", body: type === "message" ? `${senderName} sent you a message` : notificationText, message, senderId: record.actor_id || null, profileUrl: actorUrl, chatUrl: type === "message" && record.actor_id ? `/?open=messages&user_id=${encodeURIComponent(record.actor_id)}` : actorUrl };
-    await Promise.all((subscriptions || []).map(async subscription => {
+    const deliveries = await Promise.all((subscriptions || []).map(async subscription => {
       try {
         await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify(notification));
+        return { ok: true };
       } catch (error) {
-        if (error.statusCode === 404 || error.statusCode === 410) await admin.from("push_subscriptions").delete().eq("id", subscription.id);
-        else console.error("PUSH_DELIVERY_FAILED", error.message || "unknown error");
+        if (error.statusCode === 404 || error.statusCode === 410) {
+          await admin.from("push_subscriptions").delete().eq("id", subscription.id);
+          return { ok: false, expired: true };
+        }
+        console.error("PUSH_DELIVERY_FAILED", error.message || "unknown error");
+        return { ok: false, expired: false };
       }
     }));
-    return json({ sent: subscriptions?.length || 0 });
+    const failed = deliveries.filter(delivery => !delivery.ok && !delivery.expired).length;
+    if (failed) return json({ error: "One or more phone notifications could not be delivered.", sent: deliveries.filter(delivery => delivery.ok).length, failed }, 502);
+    return json({ sent: deliveries.filter(delivery => delivery.ok).length, removed: deliveries.filter(delivery => delivery.expired).length });
   } catch (error) { console.error("PUSH_NOTIFICATION_FAILED", error.message || "unknown error"); return json({ error: "Push notification delivery failed." }, 500); }
 });

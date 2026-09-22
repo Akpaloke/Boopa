@@ -6,7 +6,7 @@ window.BOOPA_CONFIG = window.BOOPA_CONFIG || {
   paystackPublicKey: "pk_live_3fcd540323b6d8cb53bebb18f5febc8ebb47c119",
   paystackPlanCode: "PLN_wr6p28z1zstqalb",
   // Set this to the browser-safe VAPID public key used by the push Edge Function.
-  pushVapidPublicKey: ""
+  pushVapidPublicKey: "BGSSSuv5NQ6LbtGcwWfO-aIMyLv-9M-r2id_JzbrprkrwrQQFGFQ_vHn7vD_hfvJcg6LFS_V16CHX3QKwiUh-ps"
 };
 
 (() => {
