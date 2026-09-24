@@ -32,11 +32,19 @@ supabase functions deploy boopa-onesignal --no-verify-jwt
 supabase secrets set ONESIGNAL_APP_ID=<your OneSignal App ID> ONESIGNAL_REST_API_KEY=<server-only REST API key> PUSH_WEBHOOK_SECRET=<webhook secret>
 ```
 
-Point the `public.notifications` INSERT webhook to:
+Point the single `public.notifications` INSERT webhook to:
 
 `https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/boopa-onesignal`
 
 Use the same `x-push-webhook-secret` header configured in the function secrets.
+
+Do not point this webhook at `boopa-notifications` or `push-notification`.
+Those are legacy custom Web Push senders; using multiple senders can create
+duplicate notifications or fail when their separate VAPID secrets are absent.
+
+The OneSignal worker is registered separately from Boopa's legacy
+`/service-worker.js`. Users must grant the native browser notification
+permission before OneSignal can deliver phone notifications.
 
 The browser registers `/service-worker.js` only after the user chooses
 **Enable phone notifications** and `pushVapidPublicKey` is configured.
@@ -56,28 +64,15 @@ Generate a key pair once if you do not already have one:
 npx web-push generate-vapid-keys
 ```
 
-Deploy `supabase/functions/boopa-notifications` with JWT verification disabled,
-then create a Supabase Database
-Webhook for `public.notifications` INSERT events pointing to that function with
-the `x-push-webhook-secret` header. This webhook is required: Realtime updates
-the open Boopa app, while the webhook sends a Web Push notification to the
-phone when the app is backgrounded or closed. Configure it in Supabase
-Dashboard → Database → Webhooks:
+The database webhook is required: Realtime updates the open Boopa app, while
+the `boopa-onesignal` webhook sends a phone notification when the app is
+backgrounded or closed. Configure it in Supabase Dashboard → Integrations →
+Webhooks:
 
 * Table: `public.notifications`
 * Events: `INSERT`
-* URL: `https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/boopa-notifications`
+* URL: `https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/boopa-onesignal`
 * Header: `x-push-webhook-secret: <the exact PUSH_WEBHOOK_SECRET>`
-
-When using the CLI, deploy it with:
-
-```sh
-supabase functions deploy boopa-notifications --no-verify-jwt
-```
-
-The function still rejects every request without the matching
-`x-push-webhook-secret`; disabling the platform JWT check is only for allowing
-the Database Webhook to invoke it.
 
 The `202609201800_push_notifications.sql` migration creates the private
 subscription table and RLS policies.
@@ -94,17 +89,12 @@ PUSH_VAPID_PUBLIC_KEY=BGSSSuv5NQ6LbtGcwWfO-aIMyLv-9M-r2id_JzbrprkrwrQQFGFQ_vHn7v
 The deployed `config.js` must expose that value as `pushVapidPublicKey`. Keep
 `VAPID_PRIVATE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `PUSH_WEBHOOK_SECRET` in
 Supabase Edge Function secrets, never in Vercel frontend variables or browser
-JavaScript. The Database Webhook should send notification inserts to the
-deployed `boopa-notifications` function.
+JavaScript. The VAPID values are only needed if you intentionally use the
+legacy custom Web Push sender; they are not needed for the OneSignal path.
 
 The static deployment must inject `PUSH_VAPID_PUBLIC_KEY` into `config.js`;
 adding it to Vercel alone does not automatically expose it to this static
 HTML app.
-
-```sh
-supabase functions deploy boopa-notifications --no-verify-jwt
-supabase secrets set VAPID_SUBJECT=mailto:admin@boopa.app VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... PUSH_WEBHOOK_SECRET=...
-```
 
 After deployment, each user must enable **Phone notifications** once from
 their Boopa profile. The browser permission prompt is required by Android and

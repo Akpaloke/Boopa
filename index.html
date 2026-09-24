@@ -356,24 +356,31 @@ const requestOneSignalPermissionOnce = OneSignal => {
   let attempted=false;
   let alreadyRequested=false;
   try { alreadyRequested=localStorage.getItem(oneSignalPermissionKey)==="1"; } catch(error) { console.debug("Boopa notification preference is unavailable.",error); }
+  if(alreadyRequested) return;
+  const interactionEvents=["pointerdown","keydown","click","touchstart"];
+  const cleanup=()=>{
+    interactionEvents.forEach(type=>window.removeEventListener(type,onInteraction,true));
+  };
+  const markRequested=()=>{
+    try { localStorage.setItem(oneSignalPermissionKey,"1"); } catch(error) { console.debug("Boopa could not save notification preference.",error); }
+  };
   const request=async()=>{
     if(attempted||Notification.permission!=="default") return;
     attempted=true;
     try {
       const permission=await OneSignal.Notifications.requestPermission();
       if(permission==="granted"||permission==="denied"||Notification.permission!=="default") {
-        try { localStorage.setItem(oneSignalPermissionKey,"1"); } catch(error) { console.debug("Boopa could not save notification preference.",error); }
+        markRequested();
       }
     } catch(error) {
       attempted=false;
       console.debug("Boopa OneSignal permission request will wait for a user gesture.",error);
     }
-    if(Notification.permission!=="default") {
-      ["pointerdown","keydown","click"].forEach(type=>window.removeEventListener(type,request,true));
-    }
+    if(Notification.permission!=="default") cleanup();
   };
-  if(!alreadyRequested) request();
-  ["pointerdown","keydown","click"].forEach(type=>window.addEventListener(type,request,{capture:true,once:true}));
+  const onInteraction=()=>request();
+  request();
+  interactionEvents.forEach(type=>window.addEventListener(type,onInteraction,true));
 };
 const initOneSignal = userId => {
   if(!BOOPA_CONFIG.oneSignalAppId||!userId)return;
