@@ -387,7 +387,12 @@ const initOneSignal = userId => {
   window.OneSignalDeferred=window.OneSignalDeferred||[];
   window.OneSignalDeferred.push(async OneSignal=>{
     try{
-      await OneSignal.init({appId:BOOPA_CONFIG.oneSignalAppId,serviceWorkerPath:"/OneSignalSDKWorker.js"});
+      await OneSignal.init({
+        appId:BOOPA_CONFIG.oneSignalAppId,
+        safari_web_id:BOOPA_CONFIG.oneSignalSafariWebId,
+        serviceWorkerPath:"/OneSignalSDKWorker.js",
+        notifyButton:{enable:true}
+      });
       await OneSignal.login(userId);
       requestOneSignalPermissionOnce(OneSignal);
     }catch(error){console.error("Boopa OneSignal initialization failed:",error);}
