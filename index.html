@@ -15,7 +15,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.28.4/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://js.paystack.co/v2/inline.js"></script>
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script src="config.js"></script>
 <style>
   :root{
@@ -350,54 +349,6 @@ const supabaseClient = (() => {
 })();
 const PROFILE_TABLE = "profiles";
 const getSession = async () => supabaseClient ? (await supabaseClient.auth.getSession()).data.session : null;
-const oneSignalPermissionKey="boopa.onesignal.permission.requested.v1";
-const requestOneSignalPermissionOnce = OneSignal => {
-  if(!window.isSecureContext||!("Notification" in window)||Notification.permission!=="default") return;
-  let attempted=false;
-  let alreadyRequested=false;
-  try { alreadyRequested=localStorage.getItem(oneSignalPermissionKey)==="1"; } catch(error) { console.debug("Boopa notification preference is unavailable.",error); }
-  if(alreadyRequested) return;
-  const interactionEvents=["pointerdown","keydown","click","touchstart"];
-  const cleanup=()=>{
-    interactionEvents.forEach(type=>window.removeEventListener(type,onInteraction,true));
-  };
-  const markRequested=()=>{
-    try { localStorage.setItem(oneSignalPermissionKey,"1"); } catch(error) { console.debug("Boopa could not save notification preference.",error); }
-  };
-  const request=async()=>{
-    if(attempted||Notification.permission!=="default") return;
-    attempted=true;
-    try {
-      const permission=await OneSignal.Notifications.requestPermission();
-      if(permission==="granted"||permission==="denied"||Notification.permission!=="default") {
-        markRequested();
-      }
-    } catch(error) {
-      attempted=false;
-      console.debug("Boopa OneSignal permission request will wait for a user gesture.",error);
-    }
-    if(Notification.permission!=="default") cleanup();
-  };
-  const onInteraction=()=>request();
-  request();
-  interactionEvents.forEach(type=>window.addEventListener(type,onInteraction,true));
-};
-const initOneSignal = userId => {
-  if(!BOOPA_CONFIG.oneSignalAppId||!userId)return;
-  window.OneSignalDeferred=window.OneSignalDeferred||[];
-  window.OneSignalDeferred.push(async OneSignal=>{
-    try{
-      await OneSignal.init({
-        appId:BOOPA_CONFIG.oneSignalAppId,
-        safari_web_id:BOOPA_CONFIG.oneSignalSafariWebId,
-        serviceWorkerPath:"/OneSignalSDKWorker.js",
-        notifyButton:{enable:true}
-      });
-      await OneSignal.login(userId);
-      requestOneSignalPermissionOnce(OneSignal);
-    }catch(error){console.error("Boopa OneSignal initialization failed:",error);}
-  });
-};
 const pushDiagnostics = () => {
   const checks={secure:window.isSecureContext||location.hostname==="localhost",notification:"Notification" in window,serviceWorker:"serviceWorker" in navigator,push:"PushManager" in window};
   Object.entries(checks).forEach(([name,ok])=>console.debug(`[Boopa Push] ${name}: ${ok?"supported":"unavailable"}`));
@@ -847,7 +798,6 @@ function Messages({target,onBack,profileId}){
 
 function App({profile,onLogout}){
   const [currentProfile,setCurrentProfile]=useState(profile); const [tab,setTab]=useState("discover"); const [selected,setSelected]=useState(null); const [theme,setTheme]=useState(localStorage.getItem("boopa-theme")||"light"); const [status,setStatus]=useState(null); const [notificationCount,setNotificationCount]=useState(0); const [notificationRefresh,setNotificationRefresh]=useState(0); const [notificationToast,setNotificationToast]=useState(""); const [offline,setOffline]=useState(!navigator.onLine);
-  useEffect(()=>{initOneSignal(profile.id);},[profile.id]);
   useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("boopa-theme",theme)},[theme]);
   useEffect(()=>{const online=()=>setOffline(false);const offlineState=()=>setOffline(true);window.addEventListener("online",online);window.addEventListener("offline",offlineState);return()=>{window.removeEventListener("online",online);window.removeEventListener("offline",offlineState);};},[]);
   useEffect(()=>{const viewport=window.visualViewport;if(!viewport)return;const updateViewport=()=>{const keyboardInset=Math.max(0,window.innerHeight-viewport.height-viewport.offsetTop);document.documentElement.style.setProperty("--boopa-keyboard-inset",keyboardInset+"px");document.documentElement.style.setProperty("--boopa-bottom-nav-height",keyboardInset>80?"0px":"72px");};updateViewport();viewport.addEventListener("resize",updateViewport);viewport.addEventListener("scroll",updateViewport);return()=>{viewport.removeEventListener("resize",updateViewport);viewport.removeEventListener("scroll",updateViewport);document.documentElement.style.removeProperty("--boopa-keyboard-inset");document.documentElement.style.removeProperty("--boopa-bottom-nav-height");};},[]);

@@ -160,10 +160,13 @@ create table if not exists public.push_subscriptions (
   endpoint text not null,
   p256dh text not null,
   auth text not null,
+  user_agent text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (user_id, endpoint)
 );
+create unique index if not exists push_subscriptions_endpoint_idx
+on public.push_subscriptions(endpoint);
 alter table public.push_subscriptions enable row level security;
 drop policy if exists "Users manage their push subscriptions" on public.push_subscriptions;
 create policy "Users manage their push subscriptions" on public.push_subscriptions for all
