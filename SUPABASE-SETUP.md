@@ -19,37 +19,16 @@ Apply all migrations in `supabase/migrations`, including `202609200935_avatar_st
 
 ## Web Push notifications
 
-### OneSignal delivery
+Boopa now uses native browser Web Push with VAPID instead of OneSignal.
+The app registers its own service worker, subscribes through the browser Push API,
+and stores each device subscription in `public.push_subscriptions`.
 
-OneSignal delivers closed-app notifications. The frontend uses the OneSignal
-Web Push App ID and associates the signed-in Supabase user ID as the OneSignal
-external ID. Never expose the OneSignal REST API key in frontend code.
-
-Deploy `supabase/functions/boopa-onesignal` with:
-
-```sh
-supabase functions deploy boopa-onesignal --no-verify-jwt
-supabase secrets set ONESIGNAL_APP_ID=<your OneSignal App ID> ONESIGNAL_REST_API_KEY=<server-only REST API key> PUSH_WEBHOOK_SECRET=<webhook secret>
-```
-
-Point the single `public.notifications` INSERT webhook to:
-
-`https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/boopa-onesignal`
-
-Use the same `x-push-webhook-secret` header configured in the function secrets.
-
-Do not point this webhook at `boopa-notifications` or `push-notification`.
-Those are legacy custom Web Push senders; using multiple senders can create
-duplicate notifications or fail when their separate VAPID secrets are absent.
-
-The OneSignal worker is registered separately from Boopa's legacy
-`/service-worker.js`. Users must grant the native browser notification
-permission before OneSignal can deliver phone notifications.
+### Browser-side registration
 
 The browser registers `/service-worker.js` only after the user chooses
-**Enable phone notifications** and `pushVapidPublicKey` is configured.
-Set the VAPID public key in `config.js` (it is safe to expose); keep the
-private key only in Supabase Edge Function secrets:
+**Enable Notifications** and the page has a valid browser-safe VAPID public key.
+The public key is safe to expose in `config.js`; keep the private key only in the
+Supabase Edge Function environment (server-side only).
 
 ```text
 VAPID_SUBJECT=mailto:admin@boopa.app
@@ -64,44 +43,45 @@ Generate a key pair once if you do not already have one:
 npx web-push generate-vapid-keys
 ```
 
-The database webhook is required: Realtime updates the open Boopa app, while
-the `boopa-onesignal` webhook sends a phone notification when the app is
-backgrounded or closed. Configure it in Supabase Dashboard → Integrations →
+### Database and webhook setup
+
+The `202609201800_push_notifications.sql` migration creates the private
+subscription table and RLS policies. It includes the `public.push_subscriptions`
+table, a unique index on `endpoint`, and user-scoped row-level security.
+
+Configure the notification database webhook in Supabase Dashboard → Integrations →
 Webhooks:
 
 * Table: `public.notifications`
 * Events: `INSERT`
-* URL: `https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/boopa-onesignal`
+* URL: `https://<project-ref>.supabase.co/functions/v1/push-notification`
 * Header: `x-push-webhook-secret: <the exact PUSH_WEBHOOK_SECRET>`
 
-The `202609201800_push_notifications.sql` migration creates the private
-subscription table and RLS policies.
+This webhook is responsible for fetching each user's subscriptions and sending
+Web Push messages using the VAPID private key.
 
-Also apply `202609201900_push_presence.sql` so the push function can suppress
-message pushes while the recipient is actively viewing that exact chat.
+### Frontend deployment values
 
-For Vercel, add only the browser-safe value:
+For a static deployment, inject the browser-safe VAPID public key into `config.js`:
 
 ```text
-PUSH_VAPID_PUBLIC_KEY=BGSSSuv5NQ6LbtGcwWfO-aIMyLv-9M-r2id_JzbrprkrwrQQFGFQ_vHn7vD_hfvJcg6LFS_V16CHX3QKwiUh-ps
+PUSH_VAPID_PUBLIC_KEY=BDxaYUK2R-LRBNIbHLW26kXVlJ92VkfBuSTFpDqTGWS3ShuLxpqv9tVChNCov_ayk8weNrneoSx0BvFd4kcUsiI
 ```
 
-The deployed `config.js` must expose that value as `pushVapidPublicKey`. Keep
-`VAPID_PRIVATE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `PUSH_WEBHOOK_SECRET` in
-Supabase Edge Function secrets, never in Vercel frontend variables or browser
-JavaScript. The VAPID values are only needed if you intentionally use the
-legacy custom Web Push sender; they are not needed for the OneSignal path.
+Keep `VAPID_PRIVATE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `PUSH_WEBHOOK_SECRET`
+in Supabase Edge Function secrets and never expose them in browser JavaScript or
+a frontend config file.
 
-The static deployment must inject `PUSH_VAPID_PUBLIC_KEY` into `config.js`;
-adding it to Vercel alone does not automatically expose it to this static
-HTML app.
+### User experience
 
-After deployment, each user must enable **Phone notifications** once from
-their Boopa profile. The browser permission prompt is required by Android and
-iOS; on iPhone, Boopa must be installed to the Home Screen for Web Push to
-appear as a normal phone notification. The subscription is stored per user
-and device in `public.push_subscriptions`, and revoked subscriptions are
-removed automatically when a phone reports them as expired.
+After deployment, each user must enable **Enable Notifications** once from the
+Boopa profile screen. Browsers require the permission prompt to be triggered by
+user interaction. On iPhone, Boopa should be installed to the Home Screen for
+Web Push to appear like a normal phone notification.
+
+The browser subscription is stored per user and device in
+`public.push_subscriptions`, and invalid/expired subscriptions are removed
+automatically when delivery fails.
 
 ## Paystack backend
 

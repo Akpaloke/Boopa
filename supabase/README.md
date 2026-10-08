@@ -9,8 +9,7 @@ supabase functions deploy verification-status
 supabase functions deploy verification-cancel
 supabase functions deploy paystack-webhook
 supabase functions deploy community-verification-initialize
-supabase functions deploy boopa-notifications --no-verify-jwt
-supabase functions deploy boopa-onesignal --no-verify-jwt
+supabase functions deploy push-notification --no-verify-jwt
 ```
 
 The frontend calls `initialize-verification-payment`. The older
@@ -33,7 +32,7 @@ Apply every migration in `supabase/migrations`, including `202609181430_profiles
 Set these server-side secrets only. `PAYSTACK_PLAN_CODE` is required by the Edge Functions as well:
 
 ```sh
-supabase secrets set PAYSTACK_SECRET_KEY=... SUPABASE_SERVICE_ROLE_KEY=... PAYSTACK_PLAN_CODE=PLN_wr6p28z1zstqalb
+supabase secrets set PAYSTACK_SECRET_KEY=... SUPABASE_SERVICE_ROLE_KEY=... PAYSTACK_PLAN_CODE=PLN_wr6p28z1zstqalb VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:admin@boopa.app PUSH_WEBHOOK_SECRET=...
 ```
 
 Configure the Paystack webhook URL as:
@@ -48,4 +47,4 @@ Supabase Database Webhooks authenticate it with the configured
 function secrets and configure the same header on the `public.notifications`
 INSERT webhook. Point the webhook to:
 
-`https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/boopa-notifications`
+`https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/push-notification`

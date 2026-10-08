@@ -6,7 +6,7 @@ window.BOOPA_CONFIG = window.BOOPA_CONFIG || {
   paystackPublicKey: "pk_live_3fcd540323b6d8cb53bebb18f5febc8ebb47c119",
   paystackPlanCode: "PLN_wr6p28z1zstqalb",
   // Browser-safe VAPID public key. The private key stays in Supabase secrets.
-  pushVapidPublicKey: "BGSSSuv5NQ6LbtGcwWfO-aIMyLv-9M-r2id_JzbrprkrwrQQFGFQ_vHn7vD_hfvJcg6LFS_V16CHX3QKwiUh-ps"
+  pushVapidPublicKey: "BDxaYUK2R-LRBNIbHLW26kXVlJ92VkfBuSTFpDqTGWS3ShuLxpqv9tVChNCov_ayk8weNrneoSx0BvFd4kcUsiI"
 };
 
 (() => {

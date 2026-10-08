@@ -29,11 +29,12 @@ self.addEventListener("fetch", event => {
 
 self.addEventListener("push", event => {
   let data = {};
-  try { data = event.data ? event.data.json() : {}; } catch (_) { data = { body: "You have a new Boopa notification." }; }
-  const title = data.title || "Boopa";
-  const message = data.message ? `${data.body || ""}\n"${data.message}"` : (data.body || "You have a new notification.");
-  event.waitUntil(self.registration.showNotification(title, {
-    body: message,
+  try { data = event.data ? event.data.json() : {}; } catch (_) { data = { title: "Boopa", body: "You have a new Boopa notification." }; }
+
+  const payload = {
+    type: data.type || "system",
+    title: data.title || "Boopa",
+    body: data.body || "You have a new Boopa notification.",
     icon: data.icon || "/boopa-icon-192.png",
     badge: data.badge || "/boopa-icon-192.png",
     tag: data.tag || `boopa-${data.type || "notification"}-${data.senderId || "general"}`,
@@ -42,21 +43,35 @@ self.addEventListener("push", event => {
     vibrate: [200, 100, 200],
     requireInteraction: false,
     data: {
-      url: data.profileUrl || data.chatUrl || data.url || "/",
+      url: data.url || data.profileUrl || data.chatUrl || "/",
       chatUrl: data.chatUrl || data.url || "/",
-      profileUrl: data.profileUrl || null
+      profileUrl: data.profileUrl || null,
+      senderId: data.senderId || null,
+      messageId: data.messageId || null
     }
-  }));
+  };
+
+  event.waitUntil(self.registration.showNotification(payload.title, payload));
 });
+
 self.addEventListener("notificationclick", event => {
   event.notification.close();
-  const target = new URL(event.notification.data?.url || event.notification.data?.profileUrl || event.notification.data?.chatUrl || "/", self.location.origin).href;
-  event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(openWindows => {
-    const existing = openWindows.find(client => client.url.startsWith(self.location.origin));
-    if (existing) {
-      existing.postMessage({ type: "BOOPA_NOTIFICATION_CLICK", url: target });
-      return existing.focus();
-    }
-    return clients.openWindow(target);
-  }));
+  const target = new URL(
+    event.notification.data?.url ||
+    event.notification.data?.profileUrl ||
+    event.notification.data?.chatUrl ||
+    "/",
+    self.location.origin
+  ).href;
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(openWindows => {
+      const matching = openWindows.find(client => client.url.startsWith(self.location.origin));
+      if (matching) {
+        matching.postMessage({ type: "BOOPA_NOTIFICATION_CLICK", url: target });
+        return matching.focus();
+      }
+      return clients.openWindow(target);
+    })
+  );
 });

@@ -357,14 +357,89 @@ const pushDiagnostics = () => {
   if(Notification.permission==="denied") return {status:"BLOCKED",message:"Notifications are blocked in your browser. Enable them in your browser settings."};
   return {status:Notification.permission==="granted"?"SUPPORTED":"PERMISSION_REQUIRED",message:""};
 };
+const base64UrlToUint8Array = value => {
+  if(!value) return null;
+  const normalized = value.replace(/-/g,"+").replace(/_/g,"/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
+};
+const ensureServiceWorkerRegistration = async () => {
+  if (!("serviceWorker" in navigator) || !window.isSecureContext) return null;
+  try {
+    return await navigator.serviceWorker.register("/service-worker.js");
+  } catch (error) {
+    console.error("[Boopa Push] Service worker registration failed:", error);
+    return null;
+  }
+};
+const savePushSubscription = async (userId, subscription) => {
+  if(!userId||!subscription?.endpoint||!subscription?.keys?.p256dh||!subscription?.keys?.auth) return null;
+  const { error } = await requireClient().from("push_subscriptions").upsert({
+    user_id:userId,
+    endpoint:subscription.endpoint,
+    p256dh:subscription.keys.p256dh,
+    auth:subscription.keys.auth,
+    user_agent:navigator.userAgent || null,
+    updated_at:new Date().toISOString()
+  }, { onConflict:"user_id,endpoint" });
+  if(error) throw error;
+  return true;
+};
+const initializePushNotifications = async ({ userId, enable = true, permissionPrompt = true } = {}) => {
+  if(!userId) throw new Error("A signed-in user is required to initialize push notifications.");
+  const base = pushDiagnostics();
+  if(!enable){
+    const registration = await navigator.serviceWorker.getRegistration("/service-worker.js");
+    const subscription = registration && await registration.pushManager.getSubscription();
+    if(subscription){
+      await subscription.unsubscribe();
+      await requireClient().from("push_subscriptions").delete().eq("user_id",userId).eq("endpoint",subscription.endpoint);
+    }
+    return {status:"SUPPORTED",enabled:false,message:"Phone notifications are off."};
+  }
+  if(base.status==="BLOCKED"||base.status==="UNSUPPORTED"||base.status==="NOT_CONFIGURED") return {...base,enabled:false};
+  try {
+    if(Notification.permission==="default"){
+      if(!permissionPrompt) return {status:"PERMISSION_REQUIRED",enabled:false,message:"Notification permission has not been granted yet."};
+      const permission=await Notification.requestPermission();
+      if(permission!=="granted") return {status:permission==="denied"?"BLOCKED":"PERMISSION_REQUIRED",enabled:false,message:permission==="denied"?"Notifications are blocked. Please enable them in your browser settings.":"Notification permission was not granted."};
+    }
+    const registration = await ensureServiceWorkerRegistration();
+    if(!registration) return {status:"UNSUPPORTED",enabled:false,message:"This browser could not register the Boopa service worker."};
+    let subscription = await registration.pushManager.getSubscription();
+    if(!subscription){
+      const keyBytes = base64UrlToUint8Array(BOOPA_CONFIG.pushVapidPublicKey);
+      if(!keyBytes || keyBytes.length !== 65) throw new Error("The VAPID public key is invalid. Please redeploy Boopa with a valid key.");
+      subscription = await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes});
+    }
+    const json = subscription.toJSON();
+    if(!json.endpoint||!json.keys?.p256dh||!json.keys?.auth) throw new Error("The browser did not return a complete push subscription.");
+    await savePushSubscription(userId, json);
+    await registration.showNotification("Boopa notifications enabled",{
+      body:"You will now receive Boopa alerts on this device.",
+      icon:"/boopa-icon-192.png",
+      badge:"/boopa-icon-192.png",
+      tag:"boopa-notifications-enabled",
+      silent:false,
+      vibrate:[200,100,200],
+      data:{url:"/?open=notifications"}
+    });
+    return {status:"ENABLED",enabled:true,message:"Notifications enabled."};
+  } catch(error) {
+    console.error("[Boopa Push] Subscription failed:",error);
+    const message=error?.name==="NotAllowedError"?"Notifications were blocked. Enable notifications for Boopa in your phone or browser settings.":error?.message||"This device could not create a push subscription.";
+    return {status:Notification.permission==="denied"?"BLOCKED":"SUPPORTED",enabled:false,message};
+  }
+};
 const getPushState = async userId => {
   const base=pushDiagnostics();
   if(base.status==="UNSUPPORTED"||base.status==="BLOCKED") return {...base,enabled:false};
   if(!BOOPA_CONFIG.pushVapidPublicKey) return {...base,enabled:false};
   try {
-    const registration=await navigator.serviceWorker.register("/service-worker.js");
-    const subscription=await registration.pushManager.getSubscription();
-    console.debug(`[Boopa Push] Permission: ${Notification.permission}`,`[Boopa Push] Subscription: ${subscription?"active":"inactive"}`);
+    const registration = await ensureServiceWorkerRegistration();
+    if(!registration) return {...base,status:Notification.permission==="granted"?"SUPPORTED":"PERMISSION_REQUIRED",enabled:false};
+    const subscription = await registration.pushManager.getSubscription();
     if(!subscription) return {...base,status:Notification.permission==="granted"?"SUPPORTED":"PERMISSION_REQUIRED",enabled:false};
     const {data,error}=await requireClient().from("push_subscriptions").select("id").eq("user_id",userId).eq("endpoint",subscription.endpoint).maybeSingle();
     if(error) throw error;
@@ -374,61 +449,23 @@ const getPushState = async userId => {
     return {status:"SUPPORTED",enabled:false,message:"Notifications are allowed, but this device could not create a push subscription. Please try again."};
   }
 };
-const setPushEnabled = async (userId,enabled) => {
-  const base=pushDiagnostics();
-  if(!enabled) {
-    console.debug("[Boopa Notifications] Unsubscribing");
-    const registration=await navigator.serviceWorker.getRegistration("/service-worker.js");
-    const subscription=registration&&await registration.pushManager.getSubscription();
-    if(subscription){await subscription.unsubscribe();await requireClient().from("push_subscriptions").delete().eq("user_id",userId).eq("endpoint",subscription.endpoint);}
-    return {status:"SUPPORTED",enabled:false,message:"Phone notifications are off."};
-  }
-  if(base.status==="BLOCKED"||base.status==="UNSUPPORTED"||base.status==="NOT_CONFIGURED") return {...base,enabled:false};
+const setPushEnabled = async (userId,enabled) => initializePushNotifications({ userId, enable: enabled, permissionPrompt: true });
+const autoEnablePushIfAllowed = async userId => {
+  if(!userId || Notification.permission !== "granted") return null;
   try {
-    if(Notification.permission==="default"){
-      console.debug("[Boopa Notifications] Requesting permission");
-      const permission=await Notification.requestPermission();
-      if(permission!=="granted") return {status:permission==="denied"?"BLOCKED":"PERMISSION_REQUIRED",enabled:false,message:permission==="denied"?"Notifications are blocked. Please enable them in your browser settings.":"Notification permission was not granted."};
-    }
-    console.debug("[Boopa Notifications] Registering service worker");
-    await navigator.serviceWorker.register("/service-worker.js");
-    const registration=await navigator.serviceWorker.ready;
-    let subscription=await registration.pushManager.getSubscription();
-    if(!subscription){
-      console.debug("[Boopa Notifications] Creating subscription");
-      const encoded=BOOPA_CONFIG.pushVapidPublicKey.replace(/-/g,"+").replace(/_/g,"/");
-      const padded=encoded+"=".repeat((4-(encoded.length%4))%4);
-      const binary=atob(padded);
-      const bytes=Uint8Array.from(binary,char=>char.charCodeAt(0));
-      if(bytes.length!==65) throw new Error("The phone-notification key is invalid. Please redeploy Boopa with the current VAPID public key.");
-      subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
-    }
-    const json=subscription.toJSON();
-    if(!json.endpoint||!json.keys?.p256dh||!json.keys?.auth) throw new Error("The browser did not return a complete phone-notification subscription.");
-    console.debug("[Boopa Notifications] Saving subscription");
-    const {error}=await requireClient().from("push_subscriptions").upsert({user_id:userId,endpoint:json.endpoint,p256dh:json.keys?.p256dh,auth:json.keys?.auth,updated_at:new Date().toISOString()},{onConflict:"user_id,endpoint"});
-    if(error) throw error;
-    await registration.showNotification("Boopa notifications enabled",{
-      body:"You will now see Boopa alerts in your phone notification bar.",
-      icon:"/boopa-icon-192.png",
-      badge:"/boopa-icon-192.png",
-      tag:"boopa-notifications-enabled",
-      silent:false,
-      vibrate:[200,100,200],
-      data:{url:"/?open=notifications"}
-    });
-    console.debug("[Boopa Push] Subscription: active");
-    return {status:"ENABLED",enabled:true,message:"Notifications enabled."};
+    const existing = await getPushState(userId);
+    if(existing.enabled) return existing;
+    return await initializePushNotifications({ userId, enable: true, permissionPrompt: false });
   } catch(error) {
-    console.error("[Boopa Push] Subscription failed:",error);
-    const message=error?.name==="NotAllowedError"?"Notifications were blocked. Enable notifications for Boopa in your phone or browser settings.":error?.message||"This device could not create a phone-notification subscription.";
-    return {status:Notification.permission==="denied"?"BLOCKED":"SUPPORTED",enabled:false,message};
+    console.error("[Boopa Push] Auto-enable failed:", error);
+    return null;
   }
 };
 const pushSupportMessage = () => {
   const state=pushDiagnostics();
   return state.message;
 };
+window.BOOPA_PUSH = { initializePushNotifications, getPushState, setPushEnabled, autoEnablePushIfAllowed, pushDiagnostics };
 const showForegroundNotification = async notification => {
   if(!notification||!("Notification" in window)||Notification.permission!=="granted"||document.visibilityState!=="visible") return;
   try {
@@ -802,6 +839,7 @@ function App({profile,onLogout}){
   useEffect(()=>{const online=()=>setOffline(false);const offlineState=()=>setOffline(true);window.addEventListener("online",online);window.addEventListener("offline",offlineState);return()=>{window.removeEventListener("online",online);window.removeEventListener("offline",offlineState);};},[]);
   useEffect(()=>{const viewport=window.visualViewport;if(!viewport)return;const updateViewport=()=>{const keyboardInset=Math.max(0,window.innerHeight-viewport.height-viewport.offsetTop);document.documentElement.style.setProperty("--boopa-keyboard-inset",keyboardInset+"px");document.documentElement.style.setProperty("--boopa-bottom-nav-height",keyboardInset>80?"0px":"72px");};updateViewport();viewport.addEventListener("resize",updateViewport);viewport.addEventListener("scroll",updateViewport);return()=>{viewport.removeEventListener("resize",updateViewport);viewport.removeEventListener("scroll",updateViewport);document.documentElement.style.removeProperty("--boopa-keyboard-inset");document.documentElement.style.removeProperty("--boopa-bottom-nav-height");};},[]);
   useEffect(()=>{let active=true;(async()=>{try{const {data,error}=await requireClient().rpc("get_profile_for_view",{target_user_id:profile.id});if(error)throw error;if(active&&data?.[0])setCurrentProfile(normalizeProfile(data[0]));}catch(error){console.error("Boopa profile hydration failed:",{message:error?.message,code:error?.code,status:error?.status});}})();return()=>{active=false;};},[profile.id]);
+  useEffect(()=>{let active=true;(async()=>{try{if(!profile?.id||Notification.permission!=="granted") return;const result=await autoEnablePushIfAllowed(profile.id);if(active&&result?.enabled){console.debug("[Boopa Push] Auto-enabled for signed-in user.");}}catch(error){console.error("[Boopa Push] Auto-enable failed:",error);}})();return()=>{active=false;};},[profile.id]);
   useEffect(()=>{let active=true;const client=requireClient();(async()=>{const session=await getSession();if(!session||session.user.id!==profile.id)return;const {count,error}=await client.from("notifications").select("id",{count:"exact",head:true}).eq("user_id",profile.id).is("read_at",null);if(!error&&active){const unread=count||0;setNotificationCount(unread);setBoopaAppBadge(unread);}})();const channel=client.channel("user-notifications-"+profile.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"notifications",filter:"user_id=eq."+profile.id},payload=>{if(!active)return;const newNotification=payload.new||{};setNotificationCount(count=>{const next=count+1;setBoopaAppBadge(next);return next;});setNotificationRefresh(value=>value+1);showForegroundNotification(newNotification);const isOpenConversation=selected&&selected.type==="messages"&&selected.value&&selected.value.id===newNotification.actor_id;if(!isOpenConversation){setNotificationToast(newNotification.message||"You have a new notification.");setTimeout(()=>setNotificationToast(""),4500);} }).subscribe();return()=>{active=false;client.removeChannel(channel);};},[profile.id, selected]);
   useEffect(()=>{const onPushClick=event=>{if(event.data?.type==="BOOPA_NOTIFICATION_CLICK"&&event.data.url)window.location.href=event.data.url;};navigator.serviceWorker?.addEventListener("message",onPushClick);return()=>navigator.serviceWorker?.removeEventListener("message",onPushClick);},[]);
   useEffect(()=>{const params=new URLSearchParams(window.location.search);const userId=params.get("user_id");const open=params.get("open");if(userId&&(open==="messages"||open==="profile")){requireClient().rpc("get_profile_for_view",{target_user_id:userId}).then(result=>{if(!result.error&&result.data?.[0]){const value=normalizeProfile(result.data[0]);setSelected({type:open==="messages"?"messages":"person",value});}});}},[]);
