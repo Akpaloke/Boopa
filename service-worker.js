@@ -1,4 +1,4 @@
-const CACHE_NAME = "boopa-shell-v2";
+const CACHE_NAME = "boopa-shell-v4";
 const SHELL_ASSETS = [
   "/",
   "/index.html",
@@ -43,15 +43,20 @@ self.addEventListener("push", event => {
     vibrate: [200, 100, 200],
     requireInteraction: false,
     data: {
-      url: data.url || data.profileUrl || data.chatUrl || "/",
+      url: data.url || data.chatUrl || data.profileUrl || "/",
       chatUrl: data.chatUrl || data.url || "/",
       profileUrl: data.profileUrl || null,
-      senderId: data.senderId || null,
-      messageId: data.messageId || null
+      senderId: data.senderId || data.data?.senderId || null,
+      messageId: data.messageId || data.data?.messageId || null,
+      notificationId: data.notificationId || data.data?.notificationId || null
     }
   };
 
-  event.waitUntil(self.registration.showNotification(payload.title, payload));
+  event.waitUntil((async () => {
+    const openWindows = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    if (openWindows.some(client => client.visibilityState === "visible" && new URL(client.url).origin === self.location.origin)) return;
+    await self.registration.showNotification(payload.title, payload);
+  })());
 });
 
 self.addEventListener("notificationclick", event => {

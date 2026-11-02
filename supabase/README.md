@@ -41,10 +41,9 @@ Configure the Paystack webhook URL as:
 
 The static frontend expects deployment-injected `window.BOOPA_CONFIG` values for the Supabase URL, publishable key, Paystack public key, and Paystack plan code. Do not put the secret key or service-role key in this file, frontend environment variables, or browser code.
 
-The push function is intentionally deployed with JWT verification disabled because
-Supabase Database Webhooks authenticate it with the configured
-`x-push-webhook-secret` header instead. Keep `PUSH_WEBHOOK_SECRET` set in the
-function secrets and configure the same header on the `public.notifications`
-INSERT webhook. Point the webhook to:
-
-`https://uhjezsadlbtrapiyzqrt.supabase.co/functions/v1/push-notification`
+The `push-notification` function is deployed with JWT verification disabled;
+the `202610081300_push_delivery_webhook.sql` trigger sends notification inserts
+to it with `x-push-webhook-secret`. Set `PUSH_WEBHOOK_SECRET` as a function
+secret and store the same value in Supabase Vault as
+`boopa_push_webhook_secret` before applying the migration. The matching VAPID
+public/private keys and `VAPID_SUBJECT` must also be set as function secrets.

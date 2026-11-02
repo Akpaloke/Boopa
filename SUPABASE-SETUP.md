@@ -17,6 +17,14 @@ The local variable names and deployment placeholders are documented in `.env.exa
 
 Apply all migrations in `supabase/migrations`, including `202609200935_avatar_storage.sql` and `202609201132_friend_avatar_policies.sql`. These ensure the public `avatars` bucket exists, restrict avatar operations to the owner's user-id path, and limit friend-request updates to the receiving user.
 
+### Password recovery
+
+The login screen sends password recovery emails through Supabase Auth. In
+Supabase Dashboard → Authentication → URL Configuration, set the deployed
+Boopa URL as the Site URL and add the deployed origin (and any development
+origins used for testing) to Redirect URLs. The recovery email returns users to
+Boopa, where they can choose and confirm a new password.
+
 ## Web Push notifications
 
 Boopa now uses native browser Web Push with VAPID instead of OneSignal.
@@ -49,16 +57,25 @@ The `202609201800_push_notifications.sql` migration creates the private
 subscription table and RLS policies. It includes the `public.push_subscriptions`
 table, a unique index on `endpoint`, and user-scoped row-level security.
 
-Configure the notification database webhook in Supabase Dashboard → Integrations →
-Webhooks:
+Deploy `supabase/functions/push-notification` with JWT verification disabled;
+the function authenticates database calls using `PUSH_WEBHOOK_SECRET`. Set
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, and
+`PUSH_WEBHOOK_SECRET` as Supabase Edge Function secrets. Keep the same
+`PUSH_WEBHOOK_SECRET` in Supabase Vault under the name
+`boopa_push_webhook_secret`, then apply
+`202610081300_push_delivery_webhook.sql`. This migration queues a request to the
+push function after each `public.notifications` insert.
 
-* Table: `public.notifications`
-* Events: `INSERT`
-* URL: `https://<project-ref>.supabase.co/functions/v1/push-notification`
-* Header: `x-push-webhook-secret: <the exact PUSH_WEBHOOK_SECRET>`
+The VAPID sender fetches every active subscription for the receiving user and
+sends the encrypted push. Keep only one push sender for `public.notifications`;
+disable any previous OneSignal or legacy sender webhooks to avoid duplicate
+phone alerts.
 
-This webhook is responsible for fetching each user's subscriptions and sending
-Web Push messages using the VAPID private key.
+Message inserts and friend-request inserts already create rows in
+`public.notifications` through database triggers. The push webhook listens to
+those notification rows, so it delivers message and friend-request alerts to
+every active subscription for the receiving user. The message push contains
+only the sender's name, not the private message content.
 
 ### Frontend deployment values
 
@@ -71,6 +88,8 @@ PUSH_VAPID_PUBLIC_KEY=BDxaYUK2R-LRBNIbHLW26kXVlJ92VkfBuSTFpDqTGWS3ShuLxpqv9tVChN
 Keep `VAPID_PRIVATE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `PUSH_WEBHOOK_SECRET`
 in Supabase Edge Function secrets and never expose them in browser JavaScript or
 a frontend config file.
+The server-side `VAPID_PUBLIC_KEY` must match `pushVapidPublicKey` in the
+deployed `config.js`; the public and private keys must be a matching key pair.
 
 ### User experience
 

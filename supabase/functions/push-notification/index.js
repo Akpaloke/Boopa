@@ -12,25 +12,65 @@ Deno.serve(async request => {
     if (!record?.user_id) return json({ error: "Notification record is incomplete." }, 400);
     const publicKey = Deno.env.get("VAPID_PUBLIC_KEY");
     const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-    if (!publicKey || !privateKey) return json({ error: "Push service is not configured." }, 500);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!publicKey || !privateKey || !supabaseUrl || !serviceRoleKey) return json({ error: "Push service is not configured." }, 500);
     webpush.setVapidDetails(Deno.env.get("VAPID_SUBJECT") || "mailto:admin@boopa.app", publicKey, privateKey);
-    const admin = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const admin = createClient(supabaseUrl, serviceRoleKey);
+    if (record.type === "message" && record.actor_id) {
+      const cutoff = new Date(Date.now() - 60 * 1000).toISOString();
+      const { data: activePresence, error: presenceError } = await admin
+        .from("active_chat_presence")
+        .select("user_id")
+        .eq("user_id", record.user_id)
+        .eq("chat_user_id", record.actor_id)
+        .gte("updated_at", cutoff)
+        .maybeSingle();
+      if (presenceError) throw presenceError;
+      if (activePresence) return json({ sent: 0, suppressed: 1, reason: "active_conversation" });
+    }
     const { data: subscriptions, error } = await admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", record.user_id);
     if (error) throw error;
     const senderResult = record.actor_id ? await admin.from("profiles").select("full_name").eq("id", record.actor_id).maybeSingle() : { data: null };
     const senderName = senderResult.data?.full_name || "Someone";
-    const type = record.type || "notification";
-    const notificationText = record.message || record.title || "You have a new Boopa notification.";
-    const message = type === "message" ? notificationText.replace(/^.*sent you a new message\.\s*/i, "").slice(0, 240) : "";
-    const actorUrl = record.actor_id ? `/?open=profile&user_id=${encodeURIComponent(record.actor_id)}` : "/?open=notifications";
-    const notification = { type, title: type === "message" ? "💬 Boopa" : "Boopa", body: type === "message" ? `${senderName} sent you a message` : notificationText, message, senderId: record.actor_id || null, profileUrl: actorUrl, chatUrl: type === "message" && record.actor_id ? `/?open=messages&user_id=${encodeURIComponent(record.actor_id)}` : actorUrl };
+    const allowedTypes = new Set(["message", "friend_request", "friend_request_accepted", "community", "opportunity", "system"]);
+    const type = allowedTypes.has(record.type) ? record.type : "system";
+    const eventCopy = {
+      message: { title: "New message", body: `${senderName} sent you a message.` },
+      friend_request: { title: "New connection request", body: `${senderName} wants to connect with you on Boopa.` },
+      friend_request_accepted: { title: "Connection accepted", body: `${senderName} accepted your connection request.` },
+    };
+    const fallbackCopy = { title: "Boopa", body: record.message || "You have a new Boopa notification." };
+    const copy = eventCopy[type] || fallbackCopy;
+    const url = type === "message" && record.actor_id
+      ? `/?open=messages&user_id=${encodeURIComponent(record.actor_id)}`
+      : type === "friend_request_accepted" && record.actor_id
+        ? `/?open=profile&user_id=${encodeURIComponent(record.actor_id)}`
+        : "/?open=notifications";
+    const notification = {
+      type,
+      title: copy.title,
+      body: copy.body,
+      url,
+      icon: "/boopa-icon-192.png",
+      badge: "/boopa-icon-192.png",
+      tag: `boopa-${record.id || `${type}-${record.user_id}`}`,
+      notificationId: record.id || null,
+      senderId: record.actor_id || null,
+      data: { senderId: record.actor_id || null, notificationId: record.id || null },
+    };
     const deliveries = await Promise.all((subscriptions || []).map(async subscription => {
       try {
-        await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify(notification));
+        await webpush.sendNotification(
+          { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
+          JSON.stringify(notification),
+          { TTL: 60 * 60, urgency: "high" },
+        );
         return { ok: true };
       } catch (error) {
         if (error.statusCode === 404 || error.statusCode === 410) {
-          await admin.from("push_subscriptions").delete().eq("id", subscription.id);
+          const { error: deleteError } = await admin.from("push_subscriptions").delete().eq("id", subscription.id);
+          if (deleteError) throw deleteError;
           return { ok: false, expired: true };
         }
         console.error("PUSH_DELIVERY_FAILED", error.message || "unknown error");

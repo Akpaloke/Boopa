@@ -175,6 +175,28 @@
   @keyframes shimmer{to{background-position:-200% 0}}
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 
+  /* Student discovery profile cards */
+  .student-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}
+  .student-grid>.stagger-in{min-width:0;}
+  .student-card{height:100%;overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--surface);cursor:pointer;transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;}
+  .student-card:hover{border-color:color-mix(in srgb,var(--primary) 38%,var(--border));box-shadow:0 10px 24px rgba(35,30,66,.08);transform:translateY(-3px);}
+  .student-card:focus-visible{outline:3px solid color-mix(in srgb,var(--primary) 28%,transparent);outline-offset:2px;}
+  .student-banner{position:relative;width:100%;height:210px;background:var(--bg);overflow:hidden;}
+  .student-banner img{width:100%;height:100%;object-fit:cover;object-position:center 25%;display:block;}
+  .student-banner-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,var(--bg),var(--primary-soft));}
+  .student-banner-fallback span{width:92px;height:92px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--text);color:var(--surface);font-family:var(--font-display);font-size:34px;font-weight:700;box-shadow:0 0 0 7px color-mix(in srgb,var(--surface) 70%,transparent);}
+  .student-card-body{padding:14px 14px 12px;min-height:116px;display:flex;flex-direction:column;}
+  .student-name{font-family:var(--font-display);font-size:16px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .student-meta{margin-top:6px;font-size:12.5px;color:var(--text-muted);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .student-university{margin-top:3px;font-size:12px;color:var(--text-muted);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .student-card-footer{margin-top:auto;padding-top:10px;display:flex;align-items:center;justify-content:space-between;color:var(--text-muted);}
+  .student-level{font-size:11.5px;font-weight:700;color:var(--text);padding:5px 8px;border:1px solid var(--border);border-radius:999px;background:var(--bg);}
+  .student-grid-empty{grid-column:1/-1;}
+  .student-card-skeleton{overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--surface);}
+  .student-banner-skeleton{height:210px;background:linear-gradient(100deg,var(--bg) 20%,var(--border) 40%,var(--bg) 60%);background-size:250% 100%;animation:shimmer 1.3s ease-in-out infinite;}
+  .student-copy-skeleton{height:116px;padding:16px;display:flex;flex-direction:column;gap:8px;}
+  .student-copy-skeleton div{height:12px;border-radius:5px;background:var(--bg);}.student-copy-skeleton div:nth-child(2){width:70%;}.student-copy-skeleton div:nth-child(3){width:45%;margin-top:auto;}
+
   .list{display:flex;flex-direction:column;}
   .row-item{display:flex;align-items:center;gap:14px;padding:14px 6px;border-bottom:1px solid var(--border);cursor:pointer;min-width:0;}
   .row-item:hover{background:var(--bg);}
@@ -294,6 +316,8 @@
     .app-top{padding:14px 18px;}
     .page-head h2{font-size:22px;}
     .filter-row{display:grid;grid-template-columns:1fr;gap:8px;}
+    .student-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+    .student-banner,.student-banner-skeleton{height:190px;}
     .filter-row select{width:100%;}
     .row-item{gap:10px;padding:14px 2px;}
     .row-tag{max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -312,7 +336,13 @@
     .app-top{padding-left:14px;padding-right:14px;}
     .bottom-nav{padding-left:2px;padding-right:2px;}
     .bottom-nav button{padding-left:2px;padding-right:2px;font-size:9px;}
+    .student-grid{gap:8px;}
+    .student-banner,.student-banner-skeleton{height:150px;}
+    .student-banner-fallback span{width:72px;height:72px;font-size:27px;}
+    .student-card-body{padding:12px 10px 10px;min-height:108px;}
+    .student-name{font-size:14px;}
   }
+
 </style>
 </head>
 <body>
@@ -364,6 +394,12 @@ const base64UrlToUint8Array = value => {
   const binary = atob(padded);
   return Uint8Array.from(binary, char => char.charCodeAt(0));
 };
+const subscriptionUsesVapidKey = (subscription, expectedKey) => {
+  const currentKey = subscription?.options?.applicationServerKey;
+  if(!currentKey) return false;
+  const currentBytes = new Uint8Array(currentKey);
+  return currentBytes.length === expectedKey.length && currentBytes.every((byte,index) => byte === expectedKey[index]);
+};
 const ensureServiceWorkerRegistration = async () => {
   if (!("serviceWorker" in navigator) || !window.isSecureContext) return null;
   try {
@@ -386,37 +422,54 @@ const savePushSubscription = async (userId, subscription) => {
   if(error) throw error;
   return true;
 };
+const clearPushSubscriptionForUser = async userId => {
+  if(!userId||!("serviceWorker" in navigator)) return;
+  const registration=await navigator.serviceWorker.getRegistration("/service-worker.js");
+  const subscription=registration&&await registration.pushManager.getSubscription();
+  if(!subscription) return;
+  const {error}=await requireClient().from("push_subscriptions").delete().eq("user_id",userId).eq("endpoint",subscription.endpoint);
+  let unsubscribeError=null;
+  try {
+    const unsubscribed=await subscription.unsubscribe();
+    if(!unsubscribed) unsubscribeError=new Error("The browser did not remove its push subscription.");
+  } catch(error) {
+    unsubscribeError=error;
+  }
+  if(error) throw error;
+  if(unsubscribeError) throw unsubscribeError;
+};
+const requestNotificationPermission = () => Notification.requestPermission().then(permission => permission);
+
 const initializePushNotifications = async ({ userId, enable = true, permissionPrompt = true } = {}) => {
   if(!userId) throw new Error("A signed-in user is required to initialize push notifications.");
   const base = pushDiagnostics();
   if(!enable){
-    const registration = await navigator.serviceWorker.getRegistration("/service-worker.js");
-    const subscription = registration && await registration.pushManager.getSubscription();
-    if(subscription){
-      await subscription.unsubscribe();
-      await requireClient().from("push_subscriptions").delete().eq("user_id",userId).eq("endpoint",subscription.endpoint);
-    }
+    await clearPushSubscriptionForUser(userId);
     return {status:"SUPPORTED",enabled:false,message:"Phone notifications are off."};
   }
   if(base.status==="BLOCKED"||base.status==="UNSUPPORTED"||base.status==="NOT_CONFIGURED") return {...base,enabled:false};
   try {
     if(Notification.permission==="default"){
       if(!permissionPrompt) return {status:"PERMISSION_REQUIRED",enabled:false,message:"Notification permission has not been granted yet."};
-      const permission=await Notification.requestPermission();
+      const permission=await requestNotificationPermission();
       if(permission!=="granted") return {status:permission==="denied"?"BLOCKED":"PERMISSION_REQUIRED",enabled:false,message:permission==="denied"?"Notifications are blocked. Please enable them in your browser settings.":"Notification permission was not granted."};
     }
     const registration = await ensureServiceWorkerRegistration();
     if(!registration) return {status:"UNSUPPORTED",enabled:false,message:"This browser could not register the Boopa service worker."};
+    const keyBytes = base64UrlToUint8Array(BOOPA_CONFIG.pushVapidPublicKey);
+    if(!keyBytes || keyBytes.length !== 65) throw new Error("The VAPID public key is invalid. Please redeploy Boopa with a valid key.");
     let subscription = await registration.pushManager.getSubscription();
+    if(subscription && !subscriptionUsesVapidKey(subscription,keyBytes)){
+      await clearPushSubscriptionForUser(userId);
+      subscription = null;
+    }
     if(!subscription){
-      const keyBytes = base64UrlToUint8Array(BOOPA_CONFIG.pushVapidPublicKey);
-      if(!keyBytes || keyBytes.length !== 65) throw new Error("The VAPID public key is invalid. Please redeploy Boopa with a valid key.");
       subscription = await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes});
     }
     const json = subscription.toJSON();
     if(!json.endpoint||!json.keys?.p256dh||!json.keys?.auth) throw new Error("The browser did not return a complete push subscription.");
     await savePushSubscription(userId, json);
-    await registration.showNotification("Boopa notifications enabled",{
+    new Notification("Boopa notifications enabled",{
       body:"You will now receive Boopa alerts on this device.",
       icon:"/boopa-icon-192.png",
       badge:"/boopa-icon-192.png",
@@ -441,6 +494,8 @@ const getPushState = async userId => {
     if(!registration) return {...base,status:Notification.permission==="granted"?"SUPPORTED":"PERMISSION_REQUIRED",enabled:false};
     const subscription = await registration.pushManager.getSubscription();
     if(!subscription) return {...base,status:Notification.permission==="granted"?"SUPPORTED":"PERMISSION_REQUIRED",enabled:false};
+    const publicKey = base64UrlToUint8Array(BOOPA_CONFIG.pushVapidPublicKey);
+    if(!publicKey || !subscriptionUsesVapidKey(subscription,publicKey)) return {...base,status:"SUPPORTED",enabled:false};
     const {data,error}=await requireClient().from("push_subscriptions").select("id").eq("user_id",userId).eq("endpoint",subscription.endpoint).maybeSingle();
     if(error) throw error;
     return {...base,status:data?"ENABLED":"SUPPORTED",enabled:!!data,subscription};
@@ -471,17 +526,28 @@ const showForegroundNotification = async notification => {
   try {
     const registration=await navigator.serviceWorker.getRegistration("/service-worker.js");
     if(!registration)return;
-    const actorUrl=notification.actor_id?`/?open=profile&user_id=${encodeURIComponent(notification.actor_id)}`:"/?open=notifications";
-    await registration.showNotification(notification.type==="message"?"💬 Boopa":"Boopa",{
-      body:notification.message||"You have a new Boopa notification.",
+    const type=notification.type||"system";
+    const body=type==="message"
+      ?(notification.message||"You have a new message.").replace(/ sent you a new message\.$/i," sent you a message.")
+      :type==="friend_request"
+        ?"Someone wants to connect with you on Boopa."
+        :type==="friend_request_accepted"
+          ?(notification.message||"Your connection request was accepted.").replace(/friend request/i,"connection request")
+          :(notification.message||"You have a new Boopa notification.");
+    const title=type==="message"?"New message":type==="friend_request"?"New connection request":type==="friend_request_accepted"?"Connection accepted":"Boopa";
+    const url=type==="message"&&notification.actor_id
+      ?`/?open=messages&user_id=${encodeURIComponent(notification.actor_id)}`
+      :"/?open=notifications";
+    await registration.showNotification(title,{
+      body,
       icon:"/boopa-icon-192.png",
       badge:"/boopa-icon-192.png",
-      tag:`boopa-live-${notification.id||Date.now()}`,
+      tag:`boopa-${notification.id||Date.now()}`,
       renotify:true,
       silent:false,
       vibrate:[200,100,200],
       requireInteraction:false,
-      data:{url:actorUrl,profileUrl:actorUrl}
+      data:{url,senderId:notification.actor_id||null,notificationId:notification.id||null}
     });
   } catch(error) {
     console.error("Boopa foreground notification failed:",error);
@@ -690,10 +756,20 @@ function SignUp({onBack,onDone}){
 
 function Login({onBack,onDone}){
   const [number,setNumber] = useState("");
-  const [email,setEmail] = useState(""); const [password,setPassword] = useState(""); const [error,setError] = useState(""); const [saving,setSaving] = useState(false);
+  const [email,setEmail] = useState(""); const [password,setPassword] = useState(""); const [error,setError] = useState(""); const [saving,setSaving] = useState(false); const [forgotPassword,setForgotPassword] = useState(false); const [resetSent,setResetSent] = useState(false);
   const submit = async e => {
     e.preventDefault();
     setError("");
+    if(forgotPassword){
+      if(!email.trim()){setError("Enter the email address for your Boopa account.");return;}
+      setSaving(true);
+      try{
+        const {error:resetError}=await requireClient().auth.resetPasswordForEmail(email.trim(),{redirectTo:window.location.origin+window.location.pathname});
+        if(resetError)throw resetError;
+        setResetSent(true);
+      }catch(err){console.error("Boopa password reset request failed:",{message:err?.message,code:err?.code,status:err?.status});setError(err?.message||"Unable to send a password reset email. Please try again.");}finally{setSaving(false);}
+      return;
+    }
     if(!email.trim()||!password){setError("Enter your email and password.");return;}
     setSaving(true);
     try{
@@ -705,16 +781,58 @@ function Login({onBack,onDone}){
       onDone(normalizeProfile({id:data.user.id,email:data.user.email,full_name:metadata.full_name||"",university:metadata.university||"",department:metadata.department||"",level:metadata.level||"",number:number.trim()||metadata.number||"",avatar_url:metadata.avatar_url||"",bio:metadata.bio||""}));
     }catch(err){console.error("Boopa login failed:",{message:err?.message,code:err?.code,status:err?.status});setError(authErrorMessage(err));}finally{setSaving(false);}
   };
+  const startLogin=()=>{setForgotPassword(false);setResetSent(false);setError("");};
+  if(forgotPassword)return <div className="auth-shell"><div className="auth-top"><button className="back-btn" onClick={startLogin} aria-label="Back to login"><Icon name="arrow-left"/></button><Wordmark/></div><div className="auth-mid"><form className="auth-card" onSubmit={submit}>
+    <h2>Reset your password</h2><p className="sub">{resetSent?"If a Boopa account uses that email, a password reset link is on its way. Check your inbox and spam folder.":"Enter the email address linked to your Boopa account and we’ll send you a secure reset link."}</p>
+    {!resetSent&&<><div className="field" style={{marginTop:28}}><label htmlFor="reset-email">Email</label><input id="reset-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required /></div>{error&&<p className="verification-status error">{error}</p>}<button className="submit-btn" type="submit" disabled={saving}>{saving?"Sending reset link…":"Send reset link"}</button></>}
+    {resetSent&&<button className="submit-btn" type="button" onClick={startLogin}>Back to login</button>}
+  </form></div></div>;
   return <div className="auth-shell"><div className="auth-top"><button className="back-btn" onClick={onBack}><Icon name="arrow-left"/></button><Wordmark/></div><div className="auth-mid"><form className="auth-card" onSubmit={submit}>
     <h2>Welcome back</h2><p className="sub">Log in with your WhatsApp number to continue.</p>
-    <div className="field" style={{marginTop:28}}><label htmlFor="login-email">Email</label><input id="login-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" required /></div><div className="field"><label htmlFor="login-password">Password</label><input id="login-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} required /></div><div className="field"><label htmlFor="login-number">WhatsApp number</label><input id="login-number" type="tel" value={number} onChange={e=>setNumber(e.target.value)} placeholder="+234 800 000 0000" /></div>
+    <div className="field" style={{marginTop:28}}><label htmlFor="login-email">Email</label><input id="login-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required /></div><div className="field"><label htmlFor="login-password">Password</label><input id="login-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required /></div><button className="cta-secondary" type="button" style={{alignSelf:"flex-end",marginTop:-8}} onClick={()=>{setForgotPassword(true);setError("");setResetSent(false);}}>Forgot password?</button><div className="field"><label htmlFor="login-number">WhatsApp number</label><input id="login-number" type="tel" value={number} onChange={e=>setNumber(e.target.value)} placeholder="+234 800 000 0000" /></div>
     {error&&<p className="verification-status error">{error}</p>}
     <button className="submit-btn" type="submit" disabled={saving}>{saving?"Signing you in…":"Log in"}</button><div className="auth-switch">New to Boopa? <button type="button" onClick={()=>onBack()}>Create a profile</button></div>
   </form></div></div>;
 }
 
+function PasswordReset({onDone}){
+  const [password,setPassword]=useState(""); const [confirmPassword,setConfirmPassword]=useState(""); const [error,setError]=useState(""); const [saving,setSaving]=useState(false); const [updated,setUpdated]=useState(false);
+  const submit=async event=>{
+    event.preventDefault();setError("");
+    if(password.length<8){setError("Your password must be at least 8 characters.");return;}
+    if(password!==confirmPassword){setError("The passwords do not match.");return;}
+    setSaving(true);
+    try{
+      const {data,error:updateError}=await requireClient().auth.updateUser({password});
+      if(updateError)throw updateError;
+      if(!data.user)throw new Error("Your password was not updated. Please request a new reset link.");
+      setUpdated(true);
+    }catch(err){console.error("Boopa password update failed:",{message:err?.message,code:err?.code,status:err?.status});setError(err?.message||"Unable to update your password. Please request a new reset link.");}finally{setSaving(false);}
+  };
+  if(updated){
+    return <div className="auth-shell"><div className="auth-top"><Wordmark/></div><div className="auth-mid"><div className="auth-card"><h2>Password updated</h2><p className="sub">Your Boopa password has been changed. You’re ready to continue.</p><button className="submit-btn" type="button" onClick={async()=>{try{const session=await getSession();if(!session)throw new Error("Your session has expired. Please log in with your new password.");const metadata=session.user.user_metadata||{};onDone(normalizeProfile({id:session.user.id,email:session.user.email,full_name:metadata.full_name||"",university:metadata.university||"",department:metadata.department||"",level:metadata.level||"",number:metadata.number||"",avatar_url:metadata.avatar_url||"",bio:metadata.bio||""}));}catch(err){setError(err.message||"Unable to continue. Please log in with your new password.");}}}>Continue to Boopa</button>{error&&<p className="verification-status error">{error}</p>}</div></div></div>;
+  }
+  return <div className="auth-shell"><div className="auth-top"><Wordmark/></div><div className="auth-mid"><form className="auth-card" onSubmit={submit}>
+    <h2>Choose a new password</h2><p className="sub">Create a new password for your Boopa account.</p>
+    <div className="field" style={{marginTop:28}}><label htmlFor="new-password">New password</label><input id="new-password" type="password" minLength="8" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" required /></div>
+    <div className="field"><label htmlFor="confirm-password">Confirm new password</label><input id="confirm-password" type="password" minLength="8" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} autoComplete="new-password" required /></div>
+    {error&&<p className="verification-status error">{error}</p>}
+    <button className="submit-btn" type="submit" disabled={saving}>{saving?"Updating password…":"Update password"}</button>
+  </form></div></div>;
+}
+
 function PersonRow({student,onClick}){
-  return <div className="row-item" onClick={onClick} role="button" tabIndex="0" onKeyDown={e=>e.key==="Enter"&&onClick()}><Avatar name={student.full_name} photo={student.avatar_url}/><div className="row-text"><div className="row-title">{student.full_name}{student.isVerified&&<VerifiedBadge/>}</div><div className="row-sub">{student.department} · {student.university}</div></div><span className="row-tag">{student.level}</span><Icon name="chevron" size={17}/></div>;
+  return <article className="student-card" onClick={onClick} role="button" tabIndex="0" onKeyDown={e=>e.key==="Enter"&&onClick()}>
+    <div className="student-banner">
+      {student.avatar_url?<img src={student.avatar_url} alt={`${student.full_name}'s profile photo`}/>:<div className="student-banner-fallback"><span>{initials(student.full_name)}</span></div>}
+    </div>
+    <div className="student-card-body">
+      <div className="student-name">{student.full_name}{student.isVerified&&<VerifiedBadge/>}</div>
+      <div className="student-meta">{student.department||"Student"}</div>
+      <div className="student-university">{student.university||"University not listed"}</div>
+      <div className="student-card-footer"><span className="student-level">{student.level||"Student"}</span><Icon name="chevron" size={17}/></div>
+    </div>
+  </article>;
 }
 
 function Discover({onPerson}){
@@ -723,7 +841,7 @@ function Discover({onPerson}){
   useEffect(()=>{load();if(!supabaseClient)return;const channel=supabaseClient.channel("profiles-discover").on("postgres_changes",{event:"*",schema:"public",table:PROFILE_TABLE},load).subscribe();return()=>supabaseClient.removeChannel(channel);},[]);
   const results=students.filter(student=>(student.full_name+" "+(student.department||"")+" "+(student.university||"")).toLowerCase().includes(query.toLowerCase())&&(university==="All universities"||student.university===university)&&(level==="All levels"||student.level===level)&&(department==="All departments"||student.department===department));
   const universities=["All universities",...Array.from(new Set(students.map(student=>student.university).filter(Boolean)))]; const departments=["All departments",...Array.from(new Set(students.map(student=>student.department).filter(Boolean)))];
-  return <div className="motion-in"><div className="page-head"><h2>Find your people</h2><p>Discover real students who share your campus and interests.</p></div><div className="search-box"><Icon name="search" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search names, departments or interests" aria-label="Search students"/></div><div className="filter-row"><select value={university} onChange={e=>setUniversity(e.target.value)}>{universities.map(item=><option key={item}>{item}</option>)}</select><select value={level} onChange={e=>setLevel(e.target.value)}><option>All levels</option>{LEVELS.map(item=><option key={item} value={item}>{item} Level</option>)}</select><select value={department} onChange={e=>setDepartment(e.target.value)}>{departments.map(item=><option key={item}>{item}</option>)}</select></div><div className="list">{loading?[1,2,3].map(item=><div className="skeleton" key={item}/>):error?<EmptyState icon="user" title="Unable to load students" body={error}/>:results.length?results.map((student,index)=><div className="stagger-in" style={{"--item-index":index}} key={student.id}><PersonRow student={student} onClick={()=>onPerson(student)}/></div>):<EmptyState icon="users" title="No other students have joined yet" body="Invite your friends to Boopa."/>}</div></div>;
+  return <div className="motion-in"><div className="page-head"><h2>Find your people</h2><p>Discover real students who share your campus and interests.</p></div><div className="search-box"><Icon name="search" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search names, departments or interests" aria-label="Search students"/></div><div className="filter-row"><select value={university} onChange={e=>setUniversity(e.target.value)}>{universities.map(item=><option key={item}>{item}</option>)}</select><select value={level} onChange={e=>setLevel(e.target.value)}><option>All levels</option>{LEVELS.map(item=><option key={item} value={item}>{item} Level</option>)}</select><select value={department} onChange={e=>setDepartment(e.target.value)}>{departments.map(item=><option key={item}>{item}</option>)}</select></div><div className="student-grid">{loading?[1,2,3,4].map(item=><div className="student-card-skeleton" key={item}><div className="student-banner-skeleton"/><div className="student-copy-skeleton"><div/><div/><div/></div></div>):error?<div className="student-grid-empty"><EmptyState icon="user" title="Unable to load students" body={error}/></div>:results.length?results.map((student,index)=><div className="stagger-in" style={{"--item-index":index}} key={student.id}><PersonRow student={student} onClick={()=>onPerson(student)}/></div>):<div className="student-grid-empty"><EmptyState icon="users" title="No other students have joined yet" body="Invite your friends to Boopa."/></div>}</div></div>;
 }
 
 function Communities({onOpen}){
@@ -834,13 +952,13 @@ function Messages({target,onBack,profileId}){
 }
 
 function App({profile,onLogout}){
-  const [currentProfile,setCurrentProfile]=useState(profile); const [tab,setTab]=useState("discover"); const [selected,setSelected]=useState(null); const [theme,setTheme]=useState(localStorage.getItem("boopa-theme")||"light"); const [status,setStatus]=useState(null); const [notificationCount,setNotificationCount]=useState(0); const [notificationRefresh,setNotificationRefresh]=useState(0); const [notificationToast,setNotificationToast]=useState(""); const [offline,setOffline]=useState(!navigator.onLine);
+  const [currentProfile,setCurrentProfile]=useState(profile); const [tab,setTab]=useState(()=>new URLSearchParams(window.location.search).get("open")==="notifications"?"notifications":"discover"); const [selected,setSelected]=useState(null); const [theme,setTheme]=useState(localStorage.getItem("boopa-theme")||"light"); const [status,setStatus]=useState(null); const [notificationCount,setNotificationCount]=useState(0); const [notificationRefresh,setNotificationRefresh]=useState(0); const [notificationToast,setNotificationToast]=useState(""); const [offline,setOffline]=useState(!navigator.onLine);
   useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("boopa-theme",theme)},[theme]);
   useEffect(()=>{const online=()=>setOffline(false);const offlineState=()=>setOffline(true);window.addEventListener("online",online);window.addEventListener("offline",offlineState);return()=>{window.removeEventListener("online",online);window.removeEventListener("offline",offlineState);};},[]);
   useEffect(()=>{const viewport=window.visualViewport;if(!viewport)return;const updateViewport=()=>{const keyboardInset=Math.max(0,window.innerHeight-viewport.height-viewport.offsetTop);document.documentElement.style.setProperty("--boopa-keyboard-inset",keyboardInset+"px");document.documentElement.style.setProperty("--boopa-bottom-nav-height",keyboardInset>80?"0px":"72px");};updateViewport();viewport.addEventListener("resize",updateViewport);viewport.addEventListener("scroll",updateViewport);return()=>{viewport.removeEventListener("resize",updateViewport);viewport.removeEventListener("scroll",updateViewport);document.documentElement.style.removeProperty("--boopa-keyboard-inset");document.documentElement.style.removeProperty("--boopa-bottom-nav-height");};},[]);
   useEffect(()=>{let active=true;(async()=>{try{const {data,error}=await requireClient().rpc("get_profile_for_view",{target_user_id:profile.id});if(error)throw error;if(active&&data?.[0])setCurrentProfile(normalizeProfile(data[0]));}catch(error){console.error("Boopa profile hydration failed:",{message:error?.message,code:error?.code,status:error?.status});}})();return()=>{active=false;};},[profile.id]);
-  useEffect(()=>{let active=true;(async()=>{try{if(!profile?.id||Notification.permission!=="granted") return;const result=await autoEnablePushIfAllowed(profile.id);if(active&&result?.enabled){console.debug("[Boopa Push] Auto-enabled for signed-in user.");}}catch(error){console.error("[Boopa Push] Auto-enable failed:",error);}})();return()=>{active=false;};},[profile.id]);
-  useEffect(()=>{let active=true;const client=requireClient();(async()=>{const session=await getSession();if(!session||session.user.id!==profile.id)return;const {count,error}=await client.from("notifications").select("id",{count:"exact",head:true}).eq("user_id",profile.id).is("read_at",null);if(!error&&active){const unread=count||0;setNotificationCount(unread);setBoopaAppBadge(unread);}})();const channel=client.channel("user-notifications-"+profile.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"notifications",filter:"user_id=eq."+profile.id},payload=>{if(!active)return;const newNotification=payload.new||{};setNotificationCount(count=>{const next=count+1;setBoopaAppBadge(next);return next;});setNotificationRefresh(value=>value+1);showForegroundNotification(newNotification);const isOpenConversation=selected&&selected.type==="messages"&&selected.value&&selected.value.id===newNotification.actor_id;if(!isOpenConversation){setNotificationToast(newNotification.message||"You have a new notification.");setTimeout(()=>setNotificationToast(""),4500);} }).subscribe();return()=>{active=false;client.removeChannel(channel);};},[profile.id, selected]);
+  useEffect(()=>{let active=true;(async()=>{try{const registration=await ensureServiceWorkerRegistration();if(active&&registration)console.debug("[Boopa Push] Service worker registered.");if(!profile?.id||Notification.permission!=="granted") return;const result=await autoEnablePushIfAllowed(profile.id);if(active&&result?.enabled){console.debug("[Boopa Push] Auto-enabled for signed-in user.");}}catch(error){console.error("[Boopa Push] Startup setup failed:",error);}})();return()=>{active=false;};},[profile.id]);
+  useEffect(()=>{let active=true;const client=requireClient();(async()=>{const session=await getSession();if(!session||session.user.id!==profile.id)return;const {count,error}=await client.from("notifications").select("id",{count:"exact",head:true}).eq("user_id",profile.id).is("read_at",null);if(!error&&active){const unread=count||0;setNotificationCount(unread);setBoopaAppBadge(unread);}})();const channel=client.channel("user-notifications-"+profile.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"notifications",filter:"user_id=eq."+profile.id},payload=>{if(!active)return;const newNotification=payload.new||{};setNotificationCount(count=>{const next=count+1;setBoopaAppBadge(next);return next;});setNotificationRefresh(value=>value+1);const isOpenConversation=selected&&selected.type==="messages"&&selected.value&&selected.value.id===newNotification.actor_id;if(!isOpenConversation){showForegroundNotification(newNotification);setNotificationToast(newNotification.message||"You have a new notification.");setTimeout(()=>setNotificationToast(""),4500);} }).subscribe();return()=>{active=false;client.removeChannel(channel);};},[profile.id, selected]);
   useEffect(()=>{const onPushClick=event=>{if(event.data?.type==="BOOPA_NOTIFICATION_CLICK"&&event.data.url)window.location.href=event.data.url;};navigator.serviceWorker?.addEventListener("message",onPushClick);return()=>navigator.serviceWorker?.removeEventListener("message",onPushClick);},[]);
   useEffect(()=>{const params=new URLSearchParams(window.location.search);const userId=params.get("user_id");const open=params.get("open");if(userId&&(open==="messages"||open==="profile")){requireClient().rpc("get_profile_for_view",{target_user_id:userId}).then(result=>{if(!result.error&&result.data?.[0]){const value=normalizeProfile(result.data[0]);setSelected({type:open==="messages"?"messages":"person",value});}});}},[]);
   const refreshStatus=async()=>{try{const base=(window.BOOPA_CONFIG?.paymentApiBaseUrl||"").replace(/\/$/,"");const response=await fetch(base+"/api/payments/status",{headers:await authHeaders()});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||("Subscription status failed ("+response.status+")."));setStatus(result);}catch(error){console.error("Boopa verification status failed:",error);setStatus({status:"unavailable",error:error.message||"Unable to load subscription status. Please try again."});}};
@@ -855,12 +973,14 @@ function App({profile,onLogout}){
 
 function Root(){
   const [screen,setScreen]=useState("landing"); const [profile,setProfile]=useState(null); const [loading,setLoading]=useState(true); const [startupError,setStartupError]=useState("");
-  useEffect(()=>{if(!supabaseClient){setStartupError("Supabase is not configured for this deployment.");setLoading(false);return;}let mounted=true;const timeout=new Promise(resolve=>setTimeout(()=>resolve(null),8000));(async()=>{try{const session=await Promise.race([getSession(),timeout]);if(session&&mounted){const metadata=session.user.user_metadata||{};setProfile(normalizeProfile({id:session.user.id,email:session.user.email,full_name:metadata.full_name||"",university:metadata.university||"",department:metadata.department||"",level:metadata.level||"",number:metadata.number||"",avatar_url:metadata.avatar_url||"",bio:metadata.bio||""}));setScreen("app");}}catch(error){console.error("Boopa startup authentication failed:",{message:error?.message,code:error?.code,status:error?.status});if(mounted)setStartupError("We could not restore your session. You can still log in again.");}finally{if(mounted)setLoading(false);}})();const {data}=supabaseClient.auth.onAuthStateChange((_event,session)=>{if(!mounted)return;if(!session){setProfile(null);setScreen("landing");}});return()=>{mounted=false;data.subscription.unsubscribe();};},[]);
+  const recoveryPending=useRef(new URLSearchParams(window.location.hash.slice(1)).get("type")==="recovery");
+  useEffect(()=>{if(!supabaseClient){setStartupError("Supabase is not configured for this deployment.");setLoading(false);return;}let mounted=true;const timeout=new Promise(resolve=>setTimeout(()=>resolve(null),8000));const makeProfile=session=>{const metadata=session.user.user_metadata||{};return normalizeProfile({id:session.user.id,email:session.user.email,full_name:metadata.full_name||"",university:metadata.university||"",department:metadata.department||"",level:metadata.level||"",number:metadata.number||"",avatar_url:metadata.avatar_url||"",bio:metadata.bio||""});};const {data}=supabaseClient.auth.onAuthStateChange((event,session)=>{if(!mounted)return;if(event==="PASSWORD_RECOVERY"&&session){recoveryPending.current=true;setProfile(makeProfile(session));setScreen("reset-password");return;}if(!session){setProfile(null);setScreen("landing");}});(async()=>{try{const session=await Promise.race([getSession(),timeout]);if(session&&mounted){setProfile(makeProfile(session));setScreen(recoveryPending.current?"reset-password":"app");}}catch(error){console.error("Boopa startup authentication failed:",{message:error?.message,code:error?.code,status:error?.status});if(mounted)setStartupError("We could not restore your session. You can still log in again.");}finally{if(mounted)setLoading(false);}})();return()=>{mounted=false;data.subscription.unsubscribe();};},[]);
   const finish=value=>{setProfile(value);setScreen("app")};
   if(screen==="signup") return <SignUp onBack={()=>setScreen("landing")} onDone={finish}/>;
   if(screen==="login") return <Login onBack={()=>setScreen("signup")} onDone={finish}/>;
+  if(screen==="reset-password") return <PasswordReset onDone={finish}/>;
   if(loading) return <div className="landing"><div className="landing-mid"><div className="landing-box"><div className="skeleton"/></div></div></div>;
-  if(screen==="app"&&profile) return <App profile={profile} onLogout={async()=>{if(supabaseClient)await supabaseClient.auth.signOut();setProfile(null);setScreen("landing")}} />;
+  if(screen==="app"&&profile) return <App profile={profile} onLogout={async()=>{try{await clearPushSubscriptionForUser(profile.id);}catch(error){console.error("[Boopa Push] Logout subscription cleanup failed:",error);}finally{if(supabaseClient)await supabaseClient.auth.signOut();setProfile(null);setScreen("landing");}}} />;
   return <><Landing onSignup={()=>setScreen("signup")} onLogin={()=>setScreen("login")}/>{startupError&&<div className="verification-status error" style={{position:"fixed",bottom:12,left:12,right:12,textAlign:"center"}}>{startupError}</div>}</>;
 }
 
