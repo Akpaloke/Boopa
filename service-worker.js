@@ -1,4 +1,4 @@
-const CACHE_NAME = "boopa-shell-v4";
+const CACHE_NAME = "boopa-shell-v5";
 const SHELL_ASSETS = [
   "/",
   "/index.html",
